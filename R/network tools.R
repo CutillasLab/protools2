@@ -201,7 +201,7 @@ pplot
 
   x.dec <- subset(results.ontology.analysis,results.ontology.analysis$effect=="Decreased")
 
-  rresults <- x.inc[order(-x.dec$counts),]
+  rresults <- x.dec[order(-x.dec$counts),]
   my.title=paste(graph.title,"Decreased")
   plot.dec <- .network.plot()
 

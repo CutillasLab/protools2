@@ -1,6 +1,6 @@
 
 available_protein_and_ks_datasets <- function(){
-  print(names(protools::protein_and_ks_sets))
+  print(names(protools2::protein_and_ks_sets))
 }
 
 
@@ -96,7 +96,7 @@ kinase.substrate.enrichment <- function(dfx, ks_db,is.ksea=TRUE){
   dfx[,1] <- gsub("..",");",dfx[,1],fixed = T)
   dfx[,1] <- gsub(".","(",dfx[,1],fixed = T)
   nc <- ncol(dfx)
-  df.ks <- protools::protein_and_ks_sets[[ks_db]]
+  df.ks <- protools2::protein_and_ks_sets[[ks_db]]
   nr <- nrow(df.ks)
   results.pvalues <-numeric(nr)
   results.zscores <-numeric(nr)
@@ -220,7 +220,7 @@ pathway_enrichment_matrix <- function(list_of_comparisons_from_limma,
                sample=names(dd))
 
     if (length(decreased.peptides)>0 & length(increased.peptides)>0){
-      pe <- protools::pathway_enrichment(increased.peptides = increased.peptides,
+      pe <- protools2::pathway_enrichment(increased.peptides = increased.peptides,
                                          decreased.peptides = decreased.peptides,
                                          background.data =  dd[[1]],
                                          graph.heading = names(dd),
@@ -321,7 +321,7 @@ pathway_enrichment_matrix_by_page_and_ks <- function(list_of_comparisons_from_li
     cl <- makeCluster(cores[1]-1)
     registerDoParallel(cl)
     xx <- foreach(db = prot_dbs,.combine = "rbind")%dopar%{
-      x <- protools::kinase.substrate.enrichment(dfx= dd[[1]],ks_db =  db, is.ksea=FALSE)
+      x <- protools2::kinase.substrate.enrichment(dfx= dd[[1]],ks_db =  db, is.ksea=FALSE)
       x
     }
     stopCluster(cl)
@@ -381,7 +381,8 @@ pathway_enrichment <- function(increased.peptides,
                                decreased.peptides,
                                background.data,
                                prot_dbs=c("kegg","hallmark.genes","nci","process"),
-                               graph.heading=""
+                               graph.heading="",
+                               is.ksea=F
                                ){
 
   library(foreach)
@@ -393,10 +394,10 @@ pathway_enrichment <- function(increased.peptides,
   t1 <- Sys.time()
   enrich.up <- foreach(db = prot_dbs, .combine = "rbind")%dopar%{
 
-    e <- protools::enrichment.from.list(list.of.peptides=increased.peptides,
+    e <- protools2::enrichment.from.list(list.of.peptides=increased.peptides,
                                         background.list,
                                         prot_db = db,
-                                        is.ksea = F)
+                                        is.ksea = is.ksea)
     if (nrow(e)>0){
       e$prot_db <- db
       e
@@ -410,7 +411,7 @@ pathway_enrichment <- function(increased.peptides,
   t1 <- Sys.time()
   enrich.do <- foreach(pp = prot_dbs, .combine = "rbind")%dopar%{
 
-    e <- protools::enrichment.from.list(list.of.peptides =  decreased.peptides,background.list, prot_db=pp, is.ksea = F)
+    e <- protools2::enrichment.from.list(list.of.peptides =  decreased.peptides,background.list, prot_db=pp, is.ksea = is.ksea)
     if (nrow(e)>0){
       e$prot_db <- pp
       e
@@ -464,7 +465,7 @@ pathway_enrichment <- function(increased.peptides,
     t1 <- Sys.time()
     enrich.combined <- foreach(db = prot_dbs, .combine = "rbind")%dopar%{
 
-      e <- protools::enrichment.from.list(list.of.peptides=c(increased.peptides,decreased.peptides),
+      e <- protools2::enrichment.from.list(list.of.peptides=c(increased.peptides,decreased.peptides),
                                           background.list,
                                           prot_db = db,
                                           is.ksea = F)
@@ -531,7 +532,7 @@ pathway_enrichment <- function(increased.peptides,
 
     #enrich.up[order(-enrich.up$enrichment),]
 
-    uniprot.data <- protools::uniprot.names
+    uniprot.data <- protools2::uniprot.names
 
     enrich.data <- enrich.up
 
@@ -583,7 +584,7 @@ pathway_enrichment <- function(increased.peptides,
     ff <- data.frame(table(mypathways$ontology))
     ff <- ff[order(ff$Freq),]
     plot.all <- ggplot(mypathways,aes(x=ontology,y=name.short))+
-      scale_color_manual(values=protools::mycolors()$C23 )+
+      scale_color_manual(values=protools2::mycolors()$C23 )+
      # scale_x_discrete(limits=rev(ff$Var1))+
       geom_point(aes(size=fold,color=ontology))  +
       theme_bw()+
@@ -684,7 +685,7 @@ enrichment.from.list <- function(
 
   ####################
 
-  df.ks <- protools::protein_and_ks_sets[[prot_db]]
+  df.ks <- protools2::protein_and_ks_sets[[prot_db]]
   df.ks <- df.ks[order(-df.ks[,2]),]
   nr <- nrow(df.ks)
 

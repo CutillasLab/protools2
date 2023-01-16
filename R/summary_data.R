@@ -6,8 +6,7 @@ summary.qual.data <- function(df.combi, df.design){
   df.mods <- data.frame(table( df.combi$pep_mod))
   df.mods.phospho.st <- df.mods[grepl("ST", df.mods$Var1),]
 
-  sites <- data.frame(df.combi[,25])
-
+  sites <- (df.combi[,25])
 
   phospho.s.unique <- format(nrow((sites[grepl("S",sites$...25,fixed = T),])),big.mark = ",")
   phospho.t.unique <- format(nrow(sites[grepl("(T",sites$...25,fixed = T),]),big.mark = ",")
