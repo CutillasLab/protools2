@@ -23,12 +23,12 @@ ksea <- function(df.fold,ks_db=c("pdts","psite"), graph.heading="",pval.cut.off=
 
   library(ggrepel)
 
-  yy <- expand.phosphopeptide.dataset(df.fold)
+  yy <- protools2::expand.phosphopeptide.dataset(df.fold)
   cores=detectCores()
   cl <- makeCluster(cores[1]-1)
   registerDoParallel(cl)
   xx <- foreach(db = ks_db,.combine = "rbind")%do%{
-    x <- kinase.substrate.enrichment(dfx= yy,ks_db =  db)
+    x <- protools2::kinase.substrate.enrichment(dfx= yy,ks_db =  db)
     x
   }
   stopCluster(cl)
@@ -80,7 +80,7 @@ kinase.substrate.enrichment <- function(dfx, ks_db,is.ksea=TRUE){
   #         results.q
   #         results.sites
   dfx <- data.frame(dfx)
-  rownames(dfx) <- dfx[,1]
+  rownames(dfx) <- make.names( dfx[,1], unique = T)
   if (is.ksea==TRUE){
     column.with.priors <- 3
     }else{
@@ -115,7 +115,7 @@ kinase.substrate.enrichment <- function(dfx, ks_db,is.ksea=TRUE){
         ss <- c(unlist(strsplit(substrates,";")))
         start.time <- Sys.time()
 
-        df.xx <- subset(dfx,dfx[,1] %in% ss)# paste(ss,";",sep=""))
+        df.xx <- subset(dfx,dfx[,1] %in%  paste(ss,";",sep=""))
 
         sites <-paste(unlist(rownames(df.xx)),collapse=";")
 

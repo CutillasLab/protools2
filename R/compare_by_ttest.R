@@ -36,7 +36,7 @@ compare.conditions.by.ttest <- function(df.design,
 
 
 compare.two.conditions.by.ttest <- function(df.to.compare,
-         log.data=TRUE,
+         log.data=FALSE,
          control.columns="",
          test.columns="",
          is.paired=FALSE)
@@ -76,8 +76,13 @@ compare.two.conditions.by.ttest <- function(df.to.compare,
       cont <- unlist(df.s[r,control.columns])
       test <- unlist(df.s[r,test.columns])
 
+
+
       if (length(na.omit(cont))>2 & length(na.omit(test))>2){
-        pval <- t.test( cont,test, paired=is.paired )$p.value
+        pval <- 1
+        tryCatch(
+        {pval <- t.test( cont,test, paired=is.paired )$p.value},error=function(e){}
+        )
         fold <- mean(test,na.rm = T)-mean(cont,na.rm = T)
         result <- c(df.s[r,1],fold,pval)
       }else{
