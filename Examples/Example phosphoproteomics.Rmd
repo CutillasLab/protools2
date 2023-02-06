@@ -1,0 +1,218 @@
+---
+title: "Example phosphoproteomic analysis data with protools2"
+author: Pedro R. Cutillas
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r Load data}
+library(foreach)
+library(dplyr)
+library(ggplot2)
+library(ggpubr)
+library(cowplot)
+library(protools2)
+
+# Pescal out put file, it should contain sheets named "design" and "comparisons" in addition to "output_areas" and "combiPeptData"
+
+# e.g.:
+pescal.output.file <- "C:/Users/cutill01/Dropbox/01pedro work/02_reports/04_Mass Spec Facility Work/MaruanGKSplusKIs.xlsm"
+
+
+
+
+df.design <- readxl::read_excel(pescal.output.file,"design")
+df.comparisons<- readxl::read_excel(pescal.output.file,"comparisons")
+
+df.ppindex <- readxl::read_excel(pescal.output.file,"ppIndex")
+df.areas <- readxl::read_excel(pescal.output.file,"output_areas")
+colnames(df.areas) <- gsub("-",".",colnames(df.areas),fixed = T)
+suppressMessages(
+df.combi <- readxl::read_excel(pescal.output.file,"combiPeptData")
+)
+
+summary.text <- protools2::summary.qual.data(df.combi = df.combi,
+                                            #df.ppindex = df.ppindex,
+                                            df.design=df.design)
+```
+`r summary.text`
+
+```{r, fig.width=14, fig.height=6}
+# Normalize data
+norm.data <- protools2::normalize_areas_return_ppindex(pescal_output_file = pescal.output.file,
+                                             delta_score_cut_off = 5)
+df.norm.scale <- norm.data$df.norm.log2.centered.scaled.na.imputed
+
+boxplot(df.norm.scale[,2:ncol(df.norm.scale)],las=3)
+```
+
+
+```{r, fig.width=14, fig.height=6}
+# Check if data has outliers by PCA
+pca.plot.no.outlier.removed <- protools::pca.plot(df.norm.scale,
+                                        df.design = df.design,
+                                        colorfactor = "condition",
+                                        shapefactor = "biol.replicate")
+
+pca.plot.no.outlier.removed
+
+```
+
+
+```{r, fig.width=14, fig.height=6}
+# Remove outliers if required
+df.norm.scale.no.outliers <- protools2::remove_outlier_samples_from_dataset(df.norm.scale)
+
+pca.plot.outlier.removed.1 <- protools2::pca.plot(df.norm.scale.no.outliers,
+                                        df.design = df.design,
+                                        colorfactor = "condition",
+                                        shapefactor = "biol.replicate")
+
+df.normalized.areas <- df.norm.scale.no.outliers
+
+pca.plot.outlier.removed.1
+```
+
+
+```{r make comparisons}
+
+comparisons <- protools2::compare.conditions.by.limma(df.design = df.design,
+                                           df.comparisons = df.comparisons,
+                                           df.normalized.areas = df.norm.scale.no.outliers
+                                          )
+
+```
+
+
+
+```{r analyse comparisons by pathway and ks analysis, warning=FALSE, fig.height=22,fig.width=14, message=FALSE}
+
+# Pathway enrichment and KSEA for each comparison
+
+i <- 1
+for (comp in comparisons){
+
+  dd <- comparisons[i]
+  names(dd)
+  # Identify differences in comparisons
+  suppressMessages(
+    ddd <- protools2::identify_differences_in_comparison_plus_volcano(dd[[1]], 
+                                                           fold.cutoff = 0, 
+                                                           pval.cutoff = 0.01,
+                                                           graph.header=names(dd))
+  )
+  
+  # Save comparison output
+  
+  write.csv(dd[[1]],file = paste0(names(dd), "_diff_by_limma.csv"))
+  
+  #main vaolcano plot
+  vp <- ddd$volcanoplot+theme_bw()
+  vp
+  
+  
+  
+  
+  # Pathway enrichment
+  decreased.peptides <- ddd$df.decreased$sites
+  increased.peptides <- ddd$df.increased$sites
+  if (length(decreased.peptides)>0 & length(increased.peptides)>0){
+    pe <- protools2::pathway_enrichment(increased.peptides = increased.peptides,
+                         decreased.peptides = decreased.peptides,
+                         background.data =  dd[[1]], 
+                         graph.heading = names(dd)
+                         )
+    plot.pathway.enrichment <- pe$plot_delta_enrichment
+  }else{
+      plot.pathway.enrichment <-ggplot()+theme_void()
+    
+    }
+  pe$plot.pathways.enrichment.by.counts
+  pe$prots.in.increased.pathways$list.of.plots.and.data$HALLMARK_TNFA_SIGNALING_VIA_NFKB$dot.pot
+  pe$prots.in.decreased.pathways$list.of.plots.and.data$`muscle cell differentiation [GO:0042692]`$dot.pot
+  
+  pe$plot.pathways.enrichment.by.counts
+  pe$plot_delta_enrichment
+  pe$pathway_enrichment_data
+  
+  nw <- protools2::plot.ont.vs.prot.relationships(results.ontology.analysis= pe$pathway_enrichment_data,
+                                                 graph.title = names(dd),
+                                                 n.pathways = 15)
+  
+  nw$combined.plot
+  
+  pk <- protools2::pathway_enrichment(increased.peptides = increased.peptides,
+                         decreased.peptides = decreased.peptides,
+                         background.data =  dd[[1]], 
+                         graph.heading = names(dd),
+                         prot_dbs =  c("psite","pdts","signor"),
+                         is.ksea = TRUE)
+  
+  
+  pk$plot_delta_enrichment
+  
+  xx <- protools2::plot.ont.vs.prot.relationships(results.ontology.analysis = pk$pathway_enrichment_data,
+                                                  n.pathways = 15,graph.title = names(dd))
+  xx$plot.decreased
+  xx$plot.increased
+  
+  
+    pk.edges <- protools2::pathway_enrichment(increased.peptides = increased.peptides,
+                         decreased.peptides = decreased.peptides,
+                         background.data =  dd[[1]], 
+                         graph.heading = names(dd),
+                         prot_dbs =  c("edges"),
+                         is.ksea = TRUE)
+  
+  
+  pk.edges$plot_delta_enrichment
+  
+  xx.e <- protools2::plot.ont.vs.prot.relationships(results.ontology.analysis = pk.edges$pathway_enrichment_data,
+                                                  n.pathways = 20,graph.title = names(dd))
+  xx.e$plot.decreased
+  xx.e$plot.increased
+  
+  
+  
+  # KSEA
+  
+  dfxx <- dd[[1]]
+  
+  dfxx$protein <-  make.names(dfxx$protein, unique = T)
+  rownames(dfxx) <- make.names(dfxx$protein, unique = T)
+  ke <- protools::ksea(df.fold = dfxx, graph.heading = names(dd), ks_db = "psite")
+  ke$ksea.volcano.plot.qvals
+  ke$ksea.volcano.plot.pvals
+  
+  knewtork <- protools2::plot.kinase.relationships(ke$ksea.data,graph.title = names(dd),pval.cutoff = 0.05)
+  knewtork
+  # KSEA CTAMS
+  
+  ctams <- protools::ksea(df.fold = dd[[1]], ks_db = "ctams",graph.heading = names(dd))
+  
+  ctam.newtork <- protools::plot.kinase.relationships(ctams$ksea.data,graph.title = names(dd),pval.cutoff = 0.05)
+  ctam.newtork
+  
+  
+  # Individual peptides
+  if (nrow(ddd$df.increased)>0 & nrow(ddd$df.decreased)>0) {
+  bp.peptides <- protools2::barplot.top.peptides(df.up=ddd$df.increased,
+                                                df.do=ddd$df.decreased,graph.heading=names(dd))
+  
+  }else{
+    bp.peptides <- ggplot()+theme_void()
+  }
+  
+  ## plot
+
+  bp.peptides
+    i <- i+1
+    #ggsave(filename = paste0("Figure_",i,"_",comp,".pdf"), plot = plot.all, width = 12,height = 15)
+  
+  }  
+  
+```
+
+
+

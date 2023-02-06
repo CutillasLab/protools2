@@ -400,6 +400,9 @@ pathway_enrichment <- function(increased.peptides,
                                         is.ksea = is.ksea)
     if (nrow(e)>0){
       e$prot_db <- db
+      if (is.ksea){
+        e$pathway <- paste0(e$pathway,"_",db)
+      }
       e
     }
   }
@@ -409,11 +412,15 @@ pathway_enrichment <- function(increased.peptides,
   cl <- makeCluster(cores[1]-1) #not to overload your computer
   registerDoParallel(cl)
   t1 <- Sys.time()
-  enrich.do <- foreach(pp = prot_dbs, .combine = "rbind")%dopar%{
+  enrich.do <- foreach(db = prot_dbs, .combine = "rbind")%dopar%{
 
-    e <- protools2::enrichment.from.list(list.of.peptides =  decreased.peptides,background.list, prot_db=pp, is.ksea = is.ksea)
+    e <- protools2::enrichment.from.list(list.of.peptides =  decreased.peptides,background.list,
+                                         prot_db=db, is.ksea = is.ksea)
     if (nrow(e)>0){
-      e$prot_db <- pp
+      e$prot_db <- db
+      if (is.ksea){
+        e$pathway <- paste0(e$pathway,"_",db)
+      }
       e
     }
   }
@@ -443,9 +450,17 @@ pathway_enrichment <- function(increased.peptides,
 
     ##### Differential enrichment up vs down ########################
 
-    diff.enrich <- merge.data.frame(enrich.do,enrich.up,by="pathway")
+    diff.enrich <- merge.data.frame(enrich.do,enrich.up,by="pathway", all = T)
 
-    diff.enrich$delta.enrichment.up.vs.down <- log2(diff.enrich$enrichment.y/diff.enrich$enrichment.x)
+     diff.enrich$enrichment.x[is.na(diff.enrich$enrichment.x)] <- 0
+     diff.enrich$enrichment.y[is.na(diff.enrich$enrichment.y)] <- 0
+     diff.enrich$pvalues.x[is.na(diff.enrich$pvalues.x)] <-1
+     diff.enrich$pvalues.y[is.na(diff.enrich$pvalues.y)] <- 1
+     diff.enrich$counts.x[is.na(diff.enrich$counts.x)] <- 0
+     diff.enrich$counts.y[is.na(diff.enrich$counts.y)] <- 0
+
+
+    diff.enrich$delta.enrichment.up.vs.down <- (diff.enrich$enrichment.y-diff.enrich$enrichment.x)
     diff.enrich$delta.pval.up.vs.down <- -log10(diff.enrich$pvalues.y)-(-log10(diff.enrich$pvalues.x))
     diff.enrich$delta.counts <- diff.enrich$counts.y-diff.enrich$counts.x
 
@@ -459,32 +474,46 @@ pathway_enrichment <- function(increased.peptides,
     ######### Enrichment both ###########################################
 
 
-    cores=detectCores()
-    cl <- makeCluster(cores[1]-1) #not to overload your computer
-    registerDoParallel(cl)
-    t1 <- Sys.time()
-    enrich.combined <- foreach(db = prot_dbs, .combine = "rbind")%dopar%{
+    dothis <- 0
 
-      e <- protools2::enrichment.from.list(list.of.peptides=c(increased.peptides,decreased.peptides),
-                                          background.list,
-                                          prot_db = db,
-                                          is.ksea = F)
-      if (nrow(e)>0){
-        e$prot_db <- db
-        e
+    if (dothis==1){
+      cores=detectCores()
+      cl <- makeCluster(cores[1]-1) #not to overload your computer
+      registerDoParallel(cl)
+      t1 <- Sys.time()
+      enrich.combined <- foreach(db = prot_dbs, .combine = "rbind")%dopar%{
+
+        e <- protools2::enrichment.from.list(list.of.peptides=c(increased.peptides,decreased.peptides),
+                                            background.list,
+                                            prot_db = db,
+                                            is.ksea = is.ksea)
+        if (nrow(e)>0){
+          e$prot_db <- db
+          e
+        }
       }
+      stopCluster(cl)
+      t2 <- Sys.time()
+      #print(t2-t1)
+
+      enrich.combined <- enrich.combined[ order(enrich.combined$pvalues),]
+
+      a <- enrich.combined$pathway
+      a <- ifelse(nchar(a) > 50, paste0(strtrim(a, 50), '...'), a)
+      enrich.combined$pathway <- a
+
+      enrich.combined <- enrich.combined[ order(enrich.combined$pvalues),]
+      plot.pathways.enrichment.by.counts.combined <- ggplot(na.omit(enrich.combined),
+                                                            aes(x=counts,y=reorder(pathway,counts)))+
+        geom_point(aes(size=log2(enrichment),color=-log10(FDR)))+
+        labs(title = "Pathway Enrichement Analysis", subtitle = "Combined analysis using increased and decreased peptides",
+             size="log2(E)", color="-log10(q)", x= "# Proteins",y="")+
+        scale_color_gradient(low="orange",high = "red")+
+        facet_wrap(~effect,scales = "free")+
+        theme_bw()
     }
-    stopCluster(cl)
-    t2 <- Sys.time()
-    #print(t2-t1)
 
-    enrich.combined <- enrich.combined[ order(enrich.combined$pvalues),]
 
-    a <- enrich.combined$pathway
-    a <- ifelse(nchar(a) > 50, paste0(strtrim(a, 50), '...'), a)
-    enrich.combined$pathway <- a
-
-    enrich.combined <- enrich.combined[ order(enrich.combined$pvalues),]
 
     ##### Plot results #################################################
     plot.diff <- ggplot(rbind.data.frame(dif.e.do,dif.e.up),aes(x=delta.enrichment.up.vs.down,y=reorder(pathway,
@@ -505,14 +534,7 @@ pathway_enrichment <- function(increased.peptides,
       theme_bw()
 
 
-    plot.pathways.enrichment.by.counts.combined <- ggplot(na.omit(enrich.combined),
-                                                          aes(x=counts,y=reorder(pathway,counts)))+
-      geom_point(aes(size=log2(enrichment),color=-log10(FDR)))+
-      labs(title = "Pathway Enrichement Analysis", subtitle = "Combined analysis using increased and decreased peptides",
-           size="log2(E)", color="-log10(q)", x= "# Proteins",y="")+
-      scale_color_gradient(low="orange",high = "red")+
-      facet_wrap(~effect,scales = "free")+
-      theme_bw()
+
 
 
 
@@ -620,12 +642,12 @@ pathway_enrichment <- function(increased.peptides,
   }
 
 
-  return(list(pathway_enrichment_data=rbind.data.frame(enrich.do[1:50,],enrich.up[1:50,]),
+  return(list(pathway_enrichment_data=rbind.data.frame(enrich.do,enrich.up),
               delta_pathway_enrichment_data=rbind.data.frame(diff.enrich),
               plot_delta_enrichment=plot.diff,
               plot.pathways.enrichment.by.counts=plot.pathways.enrichment.by.counts,
               plot.pathways.enrichment.by.enrichment=plot.pathways.enrichment.by.enrichment,
-              plot.pathways.enrichment.by.counts.combined=plot.pathways.enrichment.by.counts.combined,
+              #plot.pathways.enrichment.by.counts.combined=plot.pathways.enrichment.by.counts.combined,
               prots.in.increased.pathways=prots.in.increased.pathways,
               prots.in.decreased.pathways=prots.in.decreased.pathways)
   )
@@ -683,6 +705,8 @@ enrichment.from.list <- function(
     }
   }
 
+  list.of.peptides <- unlist(list.of.peptides)
+  background.list <- unlist(background.list)
   ####################
 
   df.ks <- protools2::protein_and_ks_sets[[prot_db]]
@@ -711,9 +735,9 @@ enrichment.from.list <- function(
       if(mym>2){
         substrates <- as.character(df.ks[r,column.with.priors])
         ss <- c(unlist(strsplit(substrates,";")))
-        if (is.ksea==TRUE | is.ksea==T){
-          ss <- paste(ss,";",sep = "")
-        }
+        #if (is.ksea==TRUE | is.ksea==T){
+        #  ss <- paste(ss,";",sep = "")
+        #}
         start.time <- Sys.time()
         k <- n#length(ss)
         q <- length(intersect(ss,list.of.peptides))
