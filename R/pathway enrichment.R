@@ -705,8 +705,8 @@ enrichment.from.list <- function(
     }
   }
 
-  list.of.peptides <- unlist(list.of.peptides)
-  background.list <- unlist(background.list)
+  list.of.peptides <- trimws (unlist(list.of.peptides))
+  background.list <- trimws(  unlist(background.list))
   ####################
 
   df.ks <- protools2::protein_and_ks_sets[[prot_db]]
@@ -723,7 +723,7 @@ enrichment.from.list <- function(
   genes <- character(nr)
 
   m <- length(background.list)
-  n <- length(list.of.peptides)
+  k <- length(list.of.peptides)
 
   bg.size <- numeric(nr)
   data.size <- numeric(nr)
@@ -739,13 +739,15 @@ enrichment.from.list <- function(
         #  ss <- paste(ss,";",sep = "")
         #}
         start.time <- Sys.time()
-        k <- n#length(ss)
+
         q <- length(intersect(ss,list.of.peptides))
         j <- length(intersect(ss,background.list))
+        n <- m-j
+
         if (q>1 & j>1){
           prots <- intersect(ss,list.of.peptides)
           peptides <- df.peptides[df.peptides$proteins %in% prots,"peptides"]
-          pvalue <- 1-phyper(q-1,j,m-j,k,lower.tail = TRUE, log.p = F)
+          pvalue <- 1-phyper(q,j,n,k,lower.tail = T, log.p = F)
           pathway[r] <- as.character(kinase)
           pvalues[r] <- pvalue
           enrichment[r] <- round((q/k)/(j/m), digits = 2)
@@ -761,10 +763,10 @@ enrichment.from.list <- function(
     }
   }
   results <- data.frame(pathway, pvalues,enrichment,counts, data.size,counts.bg,bg.size, proteins,genes)
-  results <- na.omit(results)
+  #results <- na.omit(results)
   if (nrow(results)>0){
 
-    results <- subset(results, pvalues!=0 & counts>0)
+    results <- subset(results, enrichment!=0 & counts>0)
     results <- results[order(-results$enrichment),]
     results$FDR <- p.adjust(results$pvalues, method = "BH")
   }
