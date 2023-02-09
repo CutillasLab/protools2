@@ -747,7 +747,7 @@ enrichment.from.list <- function(
         if (q>1 & j>1){
           prots <- intersect(ss,list.of.peptides)
           peptides <- df.peptides[df.peptides$proteins %in% prots,"peptides"]
-          pvalue <- 1-phyper(q,j,n,k,lower.tail = T, log.p = F)
+          pvalue <- 1-phyper(q-1,j,m-j,k,lower.tail = TRUE, log.p = F)
           pathway[r] <- as.character(kinase)
           pvalues[r] <- pvalue
           enrichment[r] <- round((q/k)/(j/m), digits = 2)
