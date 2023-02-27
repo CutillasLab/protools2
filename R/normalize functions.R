@@ -71,11 +71,11 @@ normalize_areas_return_protein_groups <- function(pescal_output_file,
                                                   n.peptide.cut.off=1){
 
   suppressMessages(
-    df.areas <- readxl::read_excel(pescal_output_file,"output_areas")
+    df.areas <- data.frame( readxl::read_excel(pescal_output_file,"output_areas"))
   )
   colnames(df.areas) <- gsub("-",".",colnames(df.areas),fixed = T)
   suppressMessages(
-    df.combi <- readxl::read_excel(pescal.output.file,"combiPeptData")
+    df.combi <- data.frame(readxl::read_excel(pescal.output.file,"combiPeptData"))
   )
 
 
@@ -103,8 +103,8 @@ normalize_areas_return_protein_groups <- function(pescal_output_file,
     ids <- na.omit(dfx$db_id)
     best.mascot.score <- max(dfx$max_scr,na.rm = T)
     protein.name <- dfx$protein[1]
-    acc <- dfx$acc_no[1]
-    uniprot.id <- dfx[1,30]
+    acc <- na.omit(dfx$acc_no)[1]
+    uniprot.id <- na.omit(dfx[1,30])[1]
     n.peptides <- length(ids)
     nPSMs <- na.omit(dfx[,"N_peptides"])
     c(protein.group=p,
