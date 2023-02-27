@@ -1,70 +1,75 @@
 
 
 
-gene.names.from.accessions <- function(accessions){
-  #library(foreach)
-  #library(doParallel)
+gene.names.from.accessions <- function(accessions, species="HUMAN"){
 
-  if (grepl("HUMAN", accessions)[1]==TRUE){
-    prot.data <- protools::uniprot.names
-  }
-  if (grepl("MOUSE", accessions)[1]==TRUE){
-    prot.data <- protools::uniprot.names.mouse
-  }
+  library(foreach)
+  library(doParallel)
 
+
+  if (species == "HUMAN"){
+    prot.data <- protools2::uniprot.names
+  }
+  if (species == "MOUSE"){
+    prot.data <- protools2::uniprot.names.mouse
+  }
+  prot.data$Entry.Name <- paste0(";",prot.data$Entry.Name,";")
   nr <- length(accessions)
   #print (nr)
-  df.s1 <- data.frame(acc=unlist(accessions),gene="gene",stringsAsFactors = F)
+  df.s1 <- data.frame(acc=paste0(";", unlist(accessions),";"),gene="gene",stringsAsFactors = F)
   #t1 <- Sys.time()
-  for (i in 1:nr ){
+
+  cl <- makeCluster(detectCores(logical = TRUE))
+  registerDoParallel(cl)
+  genes <- foreach(i = 1:nr, .combine = rbind)%dopar%{
     acc <- NA
-    #site <- as.character(phosphosite.names[i])
-    #gene <- strsplit(site,"(",fixed = TRUE)[[1]][1]
     gene <- as.character(df.s1$acc[i])
     if (nchar(gene)>0){
-      acc.1 <- subset(prot.data, prot.data$Entry.Name==gene)
-      #if (nrow(acc.1)==1){
-      acc <- as.character(acc.1$Gene.Names[1])
-      #}
+      acc.1 <- prot.data[grepl(gene,prot.data$Entry.Name,fixed = T),]
+      gene <- as.character(acc.1$Gene.Names[1])
     }
-    df.s1$gene[i] <- acc
+    gene
   }
-  #t2 <- Sys.time()
-  #print(t2-t1)
-  #print ("Gene names converted.")
-  return(na.omit(df.s1$gene))
+  stopCluster(cl)
+
+  return(genes)
 }
 
-accessions.from.gene.names <- function(genes){
+accessions.from.gene.names <- function(genes, species="HUMAN"){
 
 
-  if (grepl("HUMAN", accessions)[1]==TRUE){
-    prot.data <- protools::uniprot.names
+  library(foreach)
+  library(doParallel)
+
+
+  if (species == "HUMAN"){
+    prot.data <- protools2::uniprot.names
   }
-  if (grepl("MOUSE", accessions)[1]==TRUE){
-    prot.data <- protools::uniprot.names.mouse
+  if (species == "MOUSE"){
+    prot.data <- protools2::uniprot.names.mouse
   }
+  prot.data$genes <- paste0(";",prot.data$Gene.Names,";")
   nr <- length(genes)
   #print (nr)
-  df.s1 <- data.frame(acc=unlist(genes),gene="gene",stringsAsFactors = F)
+  df.s1 <- data.frame(acc=paste0(";", unlist(genes),";"),gene="gene",stringsAsFactors = F)
   #t1 <- Sys.time()
-  for (i in 1:nr ){
+
+  cl <- makeCluster(detectCores(logical = TRUE))
+  registerDoParallel(cl)
+  accs <- foreach(i = 1:nr, .combine = rbind)%dopar%{
+  #for (i in 1:nr ){
     acc <- NA
-    #site <- as.character(phosphosite.names[i])
-    #gene <- strsplit(site,"(",fixed = TRUE)[[1]][1]
     gene <- as.character(df.s1$acc[i])
     if (nchar(gene)>0){
-      acc.1 <- subset(prot.data,gene %in% unlist(strsplit( prot.data$Gene.Names,";")))
-      #if (nrow(acc.1)==1){
+      acc.1 <- prot.data[grepl(gene,prot.data$genes,fixed = T),]
       acc <- as.character(acc.1$Entry.Name[1])
       #}
     }
-    df.s1$gene[i] <- acc
+    acc
   }
-  #t2 <- Sys.time()
-  #print(t2-t1)
-  #print ("Gene names converted.")
-  return((df.s1$gene))
+  stopCluster(cl)
+
+  return(accs)
 }
 
 
