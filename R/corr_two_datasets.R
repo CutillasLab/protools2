@@ -36,7 +36,7 @@ corr.two.data.sets <- function(
             rval <- 0
             slope <- 0
             if (!is.null(dfx)){
-              if (nrow(dfx)>10){
+              if (nrow(dfx)>8){
                 tt <- cor.test(dfx[,1],dfx[,2],method = "pearson")
                 pval <- tt$p.value
                 if (pval<0.05){
