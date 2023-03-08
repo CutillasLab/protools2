@@ -2,7 +2,11 @@
 
 identify_differences_in_comparison_plus_volcano <- function(df, fold.cutoff=0.5,qval.cutoff=0.05, graph.header=""){
 
-  colnames(df) <- c("sites","fold","pvalue","qvalue")
+  if (ncol(df)==4){
+    colnames(df) <- c("sites","fold","pvalue","qvalue")
+  }else{
+    colnames(df) <- c("sites","fold","pvalue","qvalue", "accession")
+  }
 
   df.up <- subset(df, df$qvalue<qval.cutoff & df$fold>fold.cutoff)
   df.do <- subset(df, df$qvalue<qval.cutoff & df$fold<(-fold.cutoff))
@@ -39,7 +43,11 @@ identify_differences_in_comparison_plus_volcano <- function(df, fold.cutoff=0.5,
 
 identify_differences_by_pvalue_in_comparison_plus_volcano <- function(df, fold.cutoff=0.5,pval.cutoff=0.05, graph.header=""){
 
+  if (ncol(df)==4){
   colnames(df) <- c("sites","fold","pvalue","qvalue")
+  }else{
+    colnames(df) <- c("sites","fold","pvalue","qvalue", "accession")
+  }
 
   df.up <- subset(df, df$pvalue<pval.cutoff & df$fold>fold.cutoff)
   df.do <- subset(df, df$pvalue<pval.cutoff & df$fold<(-fold.cutoff))

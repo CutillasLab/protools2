@@ -152,9 +152,41 @@ normalize_areas_return_protein_groups <- function(pescal_output_file,
 
 
 
-  return(list(normalized.data=df.norm,
-              normalized.plus.log2.cent.data=df.norm.log2.centered,
-              normalized.plus.log2.cent.scaled.data=df.norm.log2.centered.scaled,
-              df.norm.log2.centered.scaled.na.imputed=df.norm.log2.centered.scaled.na.imputed))
+  return(list(normalized.data=df.norm[df.norm$protein.group %in% selected.prot.groups,],
+              normalized.plus.log2.cent.data=df.norm.log2.centered[df.norm.log2.centered$protein.group %in% selected.prot.groups,],
+              normalized.plus.log2.cent.scaled.data=df.norm.log2.centered.scaled[df.norm.log2.centered.scaled$protein.group %in% selected.prot.groups,],
+              df.norm.log2.centered.scaled.na.imputed=df.norm.log2.centered.scaled.na.imputed[df.norm.log2.centered.scaled.na.imputed$protein.group %in% selected.prot.groups,]))
 
 }
+
+
+
+normalize_df_to_row_mean_and_get_one_sample_ttest <- function(df){
+
+  df.s <- data.frame(t(apply(df,1,function(x) x-median(x,na.rm=T))))
+
+  .one.sample.ttest <- function(j){
+
+    pvalues <- numeric()
+    i <- 1
+    #x <- NA
+    for (x in j){
+      if (is.na(x)==F){
+        pvalues[i] <-   t.test(j, mu = x, alternative = "two.sided")$p.value
+      }else{
+        pvalues[i] <- NA
+      }
+      i <- i+1
+    }
+    return(pvalues)
+  }
+
+  yy <- data.frame(t(apply(df.s,1, function(v) one.sample.ttest(v) )))
+
+  rownames(yy) <- rownames(df)
+
+  return(list(df_normalize_to_meanRow=df.s,
+              df_pvalues=yy)
+         )
+}
+

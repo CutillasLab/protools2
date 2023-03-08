@@ -1,0 +1,67 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+# Lets get a list of potential protein markers by getting the list of proteins in the Goncalves dataset
+
+df1 <- read.csv("All CRISPR-Protein associations.csv")
+df2 <- read.csv("All Drug-Protein associations.csv"    )
+
+prot.markers.crispr <- unique(df1$prot_acc)
+prot.markers.drug <- unique(df2$prot_acc)
+
+prot.markers.both <- unique(c(prot.markers.crispr,prot.markers.drug))
+```
+
+
+```{r}
+perturbagen_datasets <- readRDS( "list_of_perturbagen_datasets.rbs")
+protein_datasets <-  readRDS("list_of_protein_datasets.rds")
+good.genes <- readRDS("vector_of_good_genes.rds")
+drugs <- colnames(perturbagen_datasets$pharmaco_drug)[2:ncol(perturbagen_datasets$pharmaco_drug)]
+i <- 1
+m <- 1
+list_of_corr_results <- list()
+for (i in 2:length(perturbagen_datasets)){
+
+  per_dataset <- perturbagen_datasets[[i]]
+  head(per_dataset)
+  name_per <- names(perturbagen_datasets)[i]
+  
+  if(grepl("depmap", name_per)){
+    perturbagens <- good.genes
+  }else{
+    
+    perturbagens <- drugs
+  }
+  j <- 1
+  for (j in 1:length(protein_datasets)){
+    prot_data <- protein_datasets[[j]]
+    prot_data_name <- names(protein_datasets)[j]
+    proteins <- colnames(prot_data)[2:ncol(prot_data)]
+    x <- protools2::corr.two.data.sets(
+            x_dataset=prot_data,
+            y_dataset=per_dataset,
+            common_column="cell.line",
+            y_factors=perturbagens, 
+            x_factors = proteins,
+             y_factor_name="perturbagen",
+             x_factor_name="protein")
+    
+    write.csv(x, paste0(name_per,"_", prot_data_name,"corr_values.csv"),row.names=F)
+  
+    #list_of_corr_results[[m]] <- x
+    #names(list_of_corr_results)[m] <- paste0(name_per,"_", prot_data_name)
+    #m <- m+1
+    }
+  }
+
+#saveRDS(list_of_corr_results, file = "list_of_corr_results.rds")
+
+
+names(list_of_corr_results)
+
+```
+
