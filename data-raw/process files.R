@@ -193,16 +193,16 @@ if (jj == 1) {
     pdt.sig,
     circuitries, # 40
     ctams.hijazi,
-    psite_ks_species$mouse,  # Incorporated new species-specific PhosphoSitePlus data
-    psite_ks_species$rat,
-    psite_ks_species$human,
-    psite_ks_species$rabbit,  # 45
-    psite_ks_species$chicken,
-    psite_ks_species$cow,
-    psite_ks_species$pig,
-    psite_ks_species$frog,
-    psite_ks_species$dog,  # 50
-    psite_ks_species$hamster
+    psite_ks_species$psite_mouse,  # Incorporated new species-specific PhosphoSitePlus data
+    psite_ks_species$psite_rat,
+    psite_ks_species$psite_human,
+    psite_ks_species$psite_rabbit,  # 45
+    psite_ks_species$psite_chicken,
+    psite_ks_species$psite_cow,
+    psite_ks_species$psite_pig,
+    psite_ks_species$psite_frog,
+    psite_ks_species$psite_dog,  # 50
+    psite_ks_species$psite_hamster
   )
 
 
