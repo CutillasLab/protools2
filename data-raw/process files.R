@@ -19,7 +19,7 @@ psite_ks_species <- vector("list", length = length(species_list))
 names(psite_ks_species) <- paste0("psite_", species_list)
 for (species in species_list) {
   psite_ks_species[[paste0("psite_", species)]] <- psite_Kinase_Substrate_Dataset %>%
-    dplyr::filter(KIN_ORGANISM == species & SUB_ORGANISM == species) %>%
+    dplyr::filter(KIN_ORGANISM == species & SUB_ORGANISM == species) %>%  # Filters matching species
     dplyr::group_by(GENE) %>%
     dplyr::summarise(
       m = dplyr::n(),
@@ -32,8 +32,7 @@ for (species in species_list) {
     dplyr::rename(gene = GENE)
 }
 
-# Save the processed data
-# Saves to 'data/psite_ks_species.rda'
+# Save the processed data (saves to 'data/psite_ks_species.rda')
 usethis::use_data(psite_ks_species)
 
 
