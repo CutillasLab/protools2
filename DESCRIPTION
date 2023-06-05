@@ -1,7 +1,7 @@
 Package: protools2
 Type: Package
 Title: A set of tools for proteomics and phosphoproteomics data analysis
-Version: 0.1.0
+Version: 0.2.1
 Date: 2023-01-07
 Author: Pedro Rodriguez Cutillas
 Maintainer: Pedro Rodriguez Cutillas <p.cutillas@qmul.ac.uk>
@@ -22,4 +22,4 @@ Imports:
     limma,
     readxl,
     stringr
-RoxygenNote: 7.2.1
+RoxygenNote: 7.2.3
