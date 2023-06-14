@@ -1,7 +1,7 @@
 Package: protools2
 Type: Package
 Title: A set of tools for proteomics and phosphoproteomics data analysis
-Version: 0.2.1
+Version: 0.2.3
 Date: 2023-01-07
 Author: Pedro Rodriguez Cutillas
 Maintainer: Pedro Rodriguez Cutillas <p.cutillas@qmul.ac.uk>
@@ -10,16 +10,31 @@ License: CC-BY-NC-ND 4.0
 Encoding: UTF-8
 LazyData: true
 Depends: 
-    R (>= 2.10)
-Imports: 
-    doParallel,
-    dplyr,
-    foreach,
-    ggplot2,
-    ggpubr,
-    ggrepel,
-    igraph,
-    limma,
+    R (>= 3.5.0)
+Imports:
+    knitr,
+    devtools,
+    openxlsx,
     readxl,
-    stringr
+    kableExtra,
+    flextable,
+    gplots,
+    grid,
+    gridExtra,
+    cowplot,
+    reshape2,
+    viridisLite,
+    webshot,
+    webshot2,
+    plotly,
+    heatmaply,
+    tools,
+    ggrepel,
+    ggpubr,
+    igraph,
+    data.table,
+    doParallel,
+    foreach,
+    tidyverse,
+    limma
 RoxygenNote: 7.2.3

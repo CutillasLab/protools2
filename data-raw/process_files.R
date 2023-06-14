@@ -36,7 +36,7 @@ for (species in species_list) {
 }
 
 # Save the processed data in package (saves to '../data/psite_ks_species.rda')
-usethis::use_data(psite_ks_species)
+usethis::use_data(psite_ks_species, overwrite = TRUE)
 
 
 # Combine with previous protein and kinase-substrate sets ----
