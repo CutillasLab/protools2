@@ -2,7 +2,9 @@
 
 
 # Fix incorrect combiPeptData gene names ----
-#' Fixes incorrect data of pre-processed mass spectrometry input:
+#' Fix incorrect gene names in Pescal Excel file
+#'
+#' Fixes incorrect data of pre-processed mass spectrometry Excel file:
 #' combiPeptData columns 25 and 29.
 #'
 #' @param df.combi \code{\link{data.frame}}. combiPeptData.
@@ -12,7 +14,9 @@
 #' output.
 #' @param fixed.xlsx String. Name for the fixed output Excel file.
 #'
-#' @return \code{\link{data.frame}}. The corrected combiPeptData.
+#' @return \code{\link{data.frame}}. The corrected combiPeptData. Additionally,
+#' saves a copy of the Pescal Excel file with the corrected combiPeptData sheet
+#' (with the name of `fixed.xlsx`).
 #'
 #' @export
 fix_combiPeptData <- function(
@@ -30,44 +34,48 @@ fix_combiPeptData <- function(
 
   # Get uniprot data
   if (organism == "human") {
-    df.uniprot <- protools2::uniprot.names
+    df.uniprot <- protools2::uniprot_human
   } else if (organism == "mouse") {
-    df.uniprot <- protools2::uniprot.names.mouse
+    df.uniprot <- protools2::uniprot_mouse
+  } else if (organism == "rat") {
+    df.uniprot <- protools2::uniprot_rat
+  } else if (organism == "pig") {
+    df.uniprot <- protools2::uniprot_pig
   } else {
-    stop("Error: `organism` must be one of 'human' or 'mouse'")
+    stop("Error: `organism` must be one of 'human', 'mouse', 'rat', or 'pig'")
   }
 
   # Fix genes column
   df1 <- df.combi %>%
-    mutate(uniprot_split = str_split(uniprot, "; ")) %>%
-    unnest(uniprot_split) %>%
-    mutate(uniprot_split = str_replace_all(uniprot_split, ";", ""))
+    dplyr::mutate(uniprot_split = stringr::str_split(uniprot, "; ")) %>%
+    tidyr::unnest(uniprot_split) %>%
+    dplyr::mutate(uniprot_split = stringr::str_replace_all(uniprot_split, ";", ""))
 
   df2 <- df.uniprot %>%
-    filter(Entry %in% df1$uniprot_split) %>%
-    select(Entry, Gene.Names..primary.)
+    dplyr::filter(Entry %in% df1$uniprot_split) %>%
+    dplyr::select(Entry, Gene.Names..primary.)
 
   df3 <- df1 %>%
-    left_join(df2, by = c("uniprot_split" = "Entry")) %>%
-    group_by(db_id) %>%
-    summarise(genes_new = paste(Gene.Names..primary., collapse = "; ")) %>%
-    mutate(genes_new = paste0(genes_new, ";"))
+    dplyr::left_join(df2, by = c("uniprot_split" = "Entry")) %>%
+    dplyr::group_by(db_id) %>%
+    dplyr::summarise(genes_new = paste(Gene.Names..primary., collapse = "; ")) %>%
+    dplyr::mutate(genes_new = paste0(genes_new, ";"))
 
   df4 <- df.combi %>%
-    left_join(df3, by = "db_id")
+    dplyr::left_join(df3, by = "db_id")
 
   # Fix genes_mod column
   df5 <- df4 %>%
-    rowwise() %>%
-    mutate(
-      genes_mod_vals = list(str_split_1(genes_mod, ";")),
-      genes_mod_keep = list(unlist(str_extract_all(genes_mod_vals, "\\(.*?\\)"))),
-      genes_new_split = list(str_replace_all(str_split_1(genes_new, "; "), ";", "")),
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      genes_mod_vals = list(stringr::str_split_1(genes_mod, ";")),
+      genes_mod_keep = list(unlist(stringr::str_extract_all(genes_mod_vals, "\\(.*?\\)"))),
+      genes_new_split = list(str_replace_all(stringr::str_split_1(genes_new, "; "), ";", "")),
       genes_mod_reinsert = list(paste0(genes_new_split, genes_mod_keep)),
       genes_mod_recomb = paste0(genes_mod_reinsert, collapse = ";"),
       genes_mod_recomb = paste0(genes_mod_recomb, ";")
     ) %>%
-    mutate(
+    dplyr::mutate(
       genes = genes_new,
       genes_mod = genes_mod_recomb,
       genes_new = NULL,
@@ -77,7 +85,7 @@ fix_combiPeptData <- function(
       genes_mod_reinsert = NULL,
       genes_mod_recomb = NULL
     ) %>%
-    rename(
+    dplyr::rename(
       ...25 = genes_mod,
       ...29 = genes,
       ...30 = uniprot
@@ -97,6 +105,8 @@ fix_combiPeptData <- function(
 
 
 # Merge function ----
+#' Merge multiple `data.table`s
+#'
 #' Merges multiple \code{\link{data.table}}s.
 #'
 #' @param dt_list \code{\link{list}} of \code{\link{data.table}}s.
@@ -109,10 +119,10 @@ fix_combiPeptData <- function(
 #'
 #' @examples
 #' DT <- data.table(x=rep(c("b","a","c"),each=3), y=c(1,3,6), v=1:9)
-#' X <- data.table(x=c("c","b"), v=8:7, foo=c(4,2))
+#' A <- data.table(x=c("c","b"), v=8:7, foo=c(4,2))
 #'
 #' multi_DT <- mergeDTs(
-#'   list(DT, X),
+#'   list(DT, A),
 #'   by = "x",
 #'   all = TRUE  # Outer join
 #' )

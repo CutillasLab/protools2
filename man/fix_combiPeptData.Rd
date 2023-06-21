@@ -2,8 +2,7 @@
 % Please edit documentation in R/script_helpers.R
 \name{fix_combiPeptData}
 \alias{fix_combiPeptData}
-\title{Fixes incorrect data of pre-processed mass spectrometry input:
-combiPeptData columns 25 and 29.}
+\title{Fix incorrect gene names in Pescal Excel file}
 \usage{
 fix_combiPeptData(
   df.combi = df.combi,
@@ -24,9 +23,11 @@ output.}
 \item{fixed.xlsx}{String. Name for the fixed output Excel file.}
 }
 \value{
-\code{\link{data.frame}}. The corrected combiPeptData.
+\code{\link{data.frame}}. The corrected combiPeptData. Additionally,
+saves a copy of the Pescal Excel file with the corrected combiPeptData sheet
+(with the name of `fixed.xlsx`).
 }
 \description{
-Fixes incorrect data of pre-processed mass spectrometry input:
+Fixes incorrect data of pre-processed mass spectrometry Excel file:
 combiPeptData columns 25 and 29.
 }

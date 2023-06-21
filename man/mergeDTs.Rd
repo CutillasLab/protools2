@@ -2,7 +2,7 @@
 % Please edit documentation in R/script_helpers.R
 \name{mergeDTs}
 \alias{mergeDTs}
-\title{Merges multiple \code{\link{data.table}}s.}
+\title{Merge multiple `data.table`s}
 \usage{
 mergeDTs(dt_list, by = NULL, all = TRUE, sort = FALSE)
 }
@@ -23,10 +23,10 @@ Merges multiple \code{\link{data.table}}s.
 }
 \examples{
 DT <- data.table(x=rep(c("b","a","c"),each=3), y=c(1,3,6), v=1:9)
-X <- data.table(x=c("c","b"), v=8:7, foo=c(4,2))
+A <- data.table(x=c("c","b"), v=8:7, foo=c(4,2))
 
 multi_DT <- mergeDTs(
-  list(DT, X),
+  list(DT, A),
   by = "x",
   all = TRUE  # Outer join
 )
