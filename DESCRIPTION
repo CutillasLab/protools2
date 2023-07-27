@@ -1,8 +1,8 @@
 Package: protools2
 Type: Package
 Title: A Set Of Tools For Proteomics And Phosphoproteomics Data Analysis
-Version: 0.2.5
-Date: 2023-06-21
+Version: 0.2.7
+Date: 2023-06-22
 Author: Pedro Rodriguez Cutillas, Irbaz I. Badshah
 Maintainer: Pedro Rodriguez Cutillas <p.cutillas@qmul.ac.uk>
 Description: Reads and normalizes data from Pescal. Does statistical analysis using limma or t-test. It also incoroporates functions for KSEA, pathway analysis and network visualization tools.
@@ -28,6 +28,7 @@ Imports:
     viridisLite,
     plotly,
     heatmaply,
+    umap,
     openxlsx,
     readxl,
     tools,
@@ -43,6 +44,7 @@ Imports:
     stringr,
     forcats,
     dtplyr,
+    parallel,
     foreach,
     doParallel,
     limma

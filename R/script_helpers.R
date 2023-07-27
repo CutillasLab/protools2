@@ -70,7 +70,7 @@ fix_combiPeptData <- function(
     dplyr::mutate(
       genes_mod_vals = list(stringr::str_split_1(genes_mod, ";")),
       genes_mod_keep = list(unlist(stringr::str_extract_all(genes_mod_vals, "\\(.*?\\)"))),
-      genes_new_split = list(str_replace_all(stringr::str_split_1(genes_new, "; "), ";", "")),
+      genes_new_split = list(stringr::str_replace_all(stringr::str_split_1(genes_new, "; "), ";", "")),
       genes_mod_reinsert = list(paste0(genes_new_split, genes_mod_keep)),
       genes_mod_recomb = paste0(genes_mod_reinsert, collapse = ";"),
       genes_mod_recomb = paste0(genes_mod_recomb, ";")
@@ -132,5 +132,120 @@ mergeDTs <- function(dt_list, by = NULL, all = TRUE, sort = FALSE) {
       merge(..., by = by, all = all, sort = sort)
     },
     dt_list
+  )
+}
+
+
+# UMAP function definition ----
+#' Uniform Manifold Approximation and Projection (UMAP)
+#'
+#' Performs Uniform Manifold Approximation and Projection (UMAP) dimensionality
+#' reduction on a matrix-like object using the \code{\link{umap::umap}} package.
+#'
+#' @param input \code{\link{data.frame}} or \code{\link{matrix}}-like object.
+#' Contains numeric data.
+#' @param label `'numeric'`, `'character'`, or `NULL`. Default `NULL` uses
+#' \code{\link{rownames}}, else labels are taken from the specified column number
+#' (`'numeric'`) or name (`'character'`) and separated from the numeric data.
+#' @param size `'numeric'`. Label text size, default = `3`.
+#' @param max.overlaps `numeric`. \code{\link{ggrepel::geom_label_repel}} `max.overlaps`
+#' parameter to exclude text labels that overlap too many items; default = `10`.
+#' @param title `'character'`. The title of the plot.
+#' @param guide `bool`. Plots the legend if `TRUE`, default `FALSE` does not.
+#'
+#' @return \code{\link{list}}. A list of two elements:
+#' \enumerate{
+#'   \item \code{\link{umap::umap}} object. Containing at least a component with an
+#'   embedding and a component with configuration settings.
+#'   \item \code{\link{ggplot2::ggplot}} object. Plot of the UMAP result.
+#' }
+#' @export
+#'
+#' @section Notes:
+#' The UMAP algorithm is stochastic, so repeated executions will yield different results.
+#'
+#' @section Warnings:
+#' If output:
+#' \preformatted{
+#' `Warning: ggrepel: _ unlabelled data points (too many overlaps). Consider increasing max.overlaps
+#' }
+#' Resolve by any of the following:
+#' \enumerate{
+#'   \item Increase plot viewer size and/or increase chunk options `fig.width` and `fig.height`.
+#'   \item Decrease argument of `size`.
+#'   \item Increase argument of `max.overlaps`.
+#' }
+#'
+#' @seealso
+#' \itemize{
+#'   \item \code{\link{umap::umap}}
+#' }
+#'
+#' @examples
+umap_and_plot <- function(
+    input,
+    label = NULL,
+    size = 3,
+    max.overlaps = getOption("ggrepel.max.overlaps", default = 10),
+    title = "UMAP",
+    guide = FALSE
+) {
+  # Packages
+  require(umap)
+  require(tidyverse)
+  require(ggrepel)
+
+  # Separate data
+  matrix_data <- na.omit(input)
+  if (is.null(label)) {
+    matrix_labels <- rownames(matrix_data)
+  } else if (is.numeric(label)) {
+    matrix_labels <- matrix_data[, label]
+    matrix_data <- matrix_data[, -label]
+  } else if (is.character(label)) {
+    matrix_labels <- matrix_data[, label]
+    matrix_data <- matrix_data[, !(colnames(matrix_data) %in% label)]
+  } else {
+    stop(
+      "Error: `label` must be one of `NULL`, of 'numeric' type, or of 'character' type.
+      Hint: Specify a column in the matrix that contains label information. Default `NULL` uses `rownames`."
+    )
+  }
+
+  # Projection
+  message(paste("UMAP computation start:", format(Sys.time(), "%d-%m-%Y %H:%M:%S")))
+  umap_projection <- umap::umap(matrix_data)
+  message(paste("UMAP computation end:", format(Sys.time(), "%d-%m-%Y %H:%M:%S")))
+
+  umap_layout <- as.data.frame(umap_projection$layout)
+  umap_layout <- umap_layout %>%
+    dplyr::mutate(labels = matrix_labels) %>%
+    dplyr::rename(UMAP1 = V1, UMAP2 = V2)
+
+  # Plot
+  plot_umap <- ggplot(
+    umap_layout,
+    aes(
+      x = UMAP1,
+      y = UMAP2,
+      colour = labels
+    )
+  ) +
+    geom_point() +
+    geom_label_repel(
+      aes(label = labels),
+      size = size,
+      max.overlaps = max.overlaps
+    ) +
+    theme_bw() +
+    labs(
+      title = title
+    )
+  # Omit colour legend
+  if (!guide) {
+    plot_umap <- plot_umap + guides(colour = "none")
+  }
+  return(
+    list(umap_projection = umap_projection, plot_umap = plot_umap)
   )
 }
