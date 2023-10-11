@@ -8,8 +8,8 @@
 #' combiPeptData columns 25 and 29.
 #'
 #' @param df.combi \code{\link{data.frame}}. combiPeptData.
-#' @param organism String. One of "human" or "mouse". Selects database of
-#' Uniprot names.
+#' @param organism String. One of "human", "mouse", "rat", or "pig". Selects database
+#' of Uniprot names.
 #' @param pescal.xlsx String. The path ("directory/name") of the Pescal Excel
 #' output.
 #' @param fixed.xlsx String. Name for the fixed output Excel file.
@@ -19,6 +19,24 @@
 #' (with the name of `fixed.xlsx`).
 #'
 #' @export
+#'
+#' @examples
+#' # Input
+#' organism_dbs <- "human"
+#' file_dir <- "Q:/Path/to/folder"
+#' pescal.output.file <- paste(file_dir, "file.xlsx", sep = "/")
+#' df.combi <- readxl::read_excel(pescal.output.file, "combiPeptData")
+#' df.combi.fixed.xlsx <- paste0(
+#'   tools::file_path_sans_ext(pescal.output.file), "_FIXED", ".xlsx"
+#' )
+#'
+#' # Execute
+#' df.combi <- fix_combiPeptData(
+#'   df.combi = df.combi,
+#'   organism = organism_dbs,
+#'   pescal.xlsx = pescal.output.file,
+#'   fixed.xlsx = df.combi.fixed.xlsx
+#' )
 fix_combiPeptData <- function(
     df.combi = df.combi,
     organism = organism_dbs,
