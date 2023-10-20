@@ -14,6 +14,9 @@ Reads and normalises proteomic and phosphoproteomic data. Does statistical analy
 7. Select: **Install**
 
 ### R console
+#### One-liner
+Run: `devtools::install_github("CutillasLab/protools2@*release")`
+#### Manual
 1. Download the Package Archive File (**protools2_x.x.x.tar.gz**) of the latest [release](https://github.com/iibadshah/protools2/releases/latest).
    - *Not the Source code*
 2. Run: `devtools::install_local(path = "C:/path/to/protools2_x.x.x.tar.gz")`
