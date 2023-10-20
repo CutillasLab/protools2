@@ -1,25 +1,51 @@
 Package: protools2
 Type: Package
-Title: A set of tools for proteomics and phosphoproteomics data analysis
-Version: 0.2.1
-Date: 2023-01-07
-Author: Pedro Rodriguez Cutillas
+Title: A Set Of Tools For Proteomics And Phosphoproteomics Data Analysis
+Version: 0.2.9
+Date: 2023-06-22
+Author: Pedro Rodriguez Cutillas, Irbaz I. Badshah
 Maintainer: Pedro Rodriguez Cutillas <p.cutillas@qmul.ac.uk>
 Description: Reads and normalizes data from Pescal. Does statistical analysis using limma or t-test. It also incoroporates functions for KSEA, pathway analysis and network visualization tools.
-License: CC-BY-NC-ND 4.0 
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 Depends: 
-    R (>= 2.10)
-Imports: 
-    doParallel,
-    dplyr,
-    foreach,
-    ggplot2,
+    R (>= 3.5.0)
+Imports:
+    knitr,
+    devtools,
+    webshot,
+    webshot2,
+    flextable,
+    kableExtra,
     ggpubr,
+    gplots,
+    grid,
+    gridExtra,
+    cowplot,
     ggrepel,
-    igraph,
-    limma,
+    reshape2,
+    viridisLite,
+    plotly,
+    heatmaply,
+    umap,
+    openxlsx,
     readxl,
-    stringr
+    tools,
+    igraph,
+    data.table,
+    magrittr,
+    tibble,
+    ggplot2,
+    dplyr,
+    tidyr,
+    readr,
+    purrr,
+    stringr,
+    forcats,
+    dtplyr,
+    parallel,
+    foreach,
+    doParallel,
+    limma
 RoxygenNote: 7.2.3
