@@ -8,9 +8,9 @@ summary.qual.data <- function(df.combi, df.design){
 
   sites <- (df.combi[,25])
 
-  phospho.s.unique <- format(nrow((sites[grepl("S",sites$...25,fixed = T),])),big.mark = ",")
-  phospho.t.unique <- format(nrow(sites[grepl("(T",sites$...25,fixed = T),]),big.mark = ",")
-  phospho.y.unique <- format(nrow(sites[grepl("(Y",sites$...25,fixed = T),]),big.mark = ",")
+  phospho.s.unique <- format(nrow(sites[grepl("S",sites[[1]],fixed = T),]),big.mark = ",")
+  phospho.t.unique <- format(nrow(sites[grepl("(T",sites[[1]],fixed = T),]),big.mark = ",")
+  phospho.y.unique <- format(nrow(sites[grepl("(Y",sites[[1]],fixed = T),]),big.mark = ",")
 
   n.st.peptides <- sum(df.mods.phospho.st$Freq)
   df.mods.phospho.y <- df.mods[grepl("(Y)", df.mods$Var1, fixed = T),]
