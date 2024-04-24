@@ -1,6 +1,5 @@
 # Functions to facillitate Proteomics and Phosphoproteomics script execution
 
-
 # Fix incorrect combiPeptData gene names ----
 #' Fix incorrect gene names in Pescal Excel file
 #'
@@ -8,8 +7,8 @@
 #' combiPeptData columns 25 and 29.
 #'
 #' @param df.combi \code{\link{data.frame}}. combiPeptData.
-#' @param organism String. One of "human", "mouse", "rat", or "pig". Selects database
-#' of Uniprot names.
+#' @param organism String. One of 'human', 'mouse', 'rat', or 'pig'. Selects
+#' database of Uniprot names.
 #' @param pescal.xlsx String. The path ("directory/name") of the Pescal Excel
 #' output.
 #' @param fixed.xlsx String. Name for the fixed output Excel file.
@@ -19,24 +18,6 @@
 #' (with the name of `fixed.xlsx`).
 #'
 #' @export
-#'
-#' @examples
-#' # Input
-#' organism_dbs <- "human"
-#' file_dir <- "Q:/Path/to/folder"
-#' pescal.output.file <- paste(file_dir, "file.xlsx", sep = "/")
-#' df.combi <- readxl::read_excel(pescal.output.file, "combiPeptData")
-#' df.combi.fixed.xlsx <- paste0(
-#'   tools::file_path_sans_ext(pescal.output.file), "_FIXED", ".xlsx"
-#' )
-#'
-#' # Execute
-#' df.combi <- fix_combiPeptData(
-#'   df.combi = df.combi,
-#'   organism = organism_dbs,
-#'   pescal.xlsx = pescal.output.file,
-#'   fixed.xlsx = df.combi.fixed.xlsx
-#' )
 fix_combiPeptData <- function(
     df.combi = df.combi,
     organism = organism_dbs,
@@ -154,261 +135,16 @@ mergeDTs <- function(dt_list, by = NULL, all = TRUE, sort = FALSE) {
 }
 
 
-# UMAP function definition ----
-#' Uniform Manifold Approximation and Projection (UMAP)
-#'
-#' Performs Uniform Manifold Approximation and Projection (UMAP) dimensionality
-#' reduction on a matrix-like object using the \code{\link{umap::umap}} package.
-#'
-#' @param input \code{\link{data.frame}} or \code{\link{matrix}}-like object.
-#' Contains numeric data.
-#' @param label `'numeric'`, `'character'`, or `NULL`. Default `NULL` uses
-#' \code{\link{rownames}}, else labels are taken from the specified column number
-#' (`'numeric'`) or name (`'character'`) and separated from the numeric data.
-#' @param size `'numeric'`. Label text size, default = `3`.
-#' @param max.overlaps `numeric`. \code{\link{ggrepel::geom_label_repel}} `max.overlaps`
-#' parameter to exclude text labels that overlap too many items; default = `10`.
-#' @param title `'character'`. The title of the plot.
-#' @param guide `bool`. Plots the legend if `TRUE`, default `FALSE` does not.
-#'
-#' @return \code{\link{list}}. A list of two elements:
-#' \enumerate{
-#'   \item \code{\link{umap::umap}} object. Containing at least a component with an
-#'   embedding and a component with configuration settings.
-#'   \item \code{\link{ggplot2::ggplot}} object. Plot of the UMAP result.
-#' }
-#' @export
-#'
-#' @section Notes:
-#' The UMAP algorithm is stochastic, so repeated executions will yield different results.
-#'
-#' @section Warnings:
-#' If output:
-#' \preformatted{
-#' `Warning: ggrepel: _ unlabelled data points (too many overlaps). Consider increasing max.overlaps
-#' }
-#' Resolve by any of the following:
-#' \enumerate{
-#'   \item Increase plot viewer size and/or increase chunk options `fig.width` and `fig.height`.
-#'   \item Decrease argument of `size`.
-#'   \item Increase argument of `max.overlaps`.
-#' }
-#'
-#' @seealso
-#' \itemize{
-#'   \item \code{\link{umap::umap}}
-#' }
-#'
-#' @examples
-#' umap_result <- umap_and_plot(
-#'   input = data,
-#'   label = NULL,
-#'   size = 3,
-#'   max.overlaps = 15,
-#'   title = "UMAP",
-#'   guide = FALSE
-#' )
-#' umap_result$plot_umap
-umap_and_plot <- function(
-    input,
-    label = NULL,
-    size = 3,
-    max.overlaps = getOption("ggrepel.max.overlaps", default = 10),
-    title = "UMAP",
-    guide = FALSE
-) {
-  # Packages
-  require(umap)
-  require(tidyverse)
-  require(ggrepel)
-
-  # Separate data
-  matrix_data <- na.omit(input)
-  if (is.null(label)) {
-    matrix_labels <- rownames(matrix_data)
-  } else if (is.numeric(label)) {
-    matrix_labels <- matrix_data[, label]
-    matrix_data <- matrix_data[, -label]
-  } else if (is.character(label)) {
-    matrix_labels <- matrix_data[, label]
-    matrix_data <- matrix_data[, !(colnames(matrix_data) %in% label)]
-  } else {
-    stop(
-      "Error: `label` must be one of `NULL`, of 'numeric' type, or of 'character' type.
-      Hint: Specify a column in the matrix that contains label information. Default `NULL` uses `rownames`."
-    )
-  }
-
-  # Projection
-  message(paste("UMAP computation start:", format(Sys.time(), "%d-%m-%Y %H:%M:%S")))
-  umap_projection <- umap::umap(matrix_data)
-  message(paste("UMAP computation end:", format(Sys.time(), "%d-%m-%Y %H:%M:%S")))
-
-  umap_layout <- as.data.frame(umap_projection$layout)
-  umap_layout <- umap_layout %>%
-    dplyr::mutate(labels = matrix_labels) %>%
-    dplyr::rename(UMAP1 = V1, UMAP2 = V2)
-
-  # Plot
-  plot_umap <- ggplot(
-    umap_layout,
-    aes(
-      x = UMAP1,
-      y = UMAP2,
-      colour = labels
-    )
-  ) +
-    geom_point() +
-    geom_label_repel(
-      aes(label = labels),
-      size = size,
-      max.overlaps = max.overlaps
-    ) +
-    theme_bw() +
-    labs(
-      title = title
-    )
-  # Omit colour legend
-  if (!guide) {
-    plot_umap <- plot_umap + guides(colour = "none")
-  }
-  return(
-    list(umap_projection = umap_projection, plot_umap = plot_umap)
-  )
-}
-
-
-# Function to install only missing packages then load all required packages ----
-#' Install multiple missing packages and load.
-#'
-#' Given vectors of CRAN packages, GitHub repositories, and Bioconductor
-#'   packages, checks which are not installed and installs only the missing
-#'   packages/repositories. If `update_all` is `TRUE`, then all packages are
-#'   installed instead, even packages already installed. The function then
-#'   loads all supplied packages.
-#'
-#' @param pkg_cran A character vector of CRAN package names.
-#' @param pkg_git A character vector of GitHub repositories, each in the
-#'   format: `"Username/repository"`.
-#' @param pkg_biocmanager A character vector of Bioconductor package names.
-#' @param update_all A logical. Default `FALSE` only installs missing packages.
-#'   If `TRUE`, the current versions of all packages will be installed.
-#' @param contriburl A character string of the repository mirror URL. See
-#'   \code{\link{install.packages}}.
-#'
-#' @return No return value. Installs missing/all packages and loads all arguments.
-#'
-#' @seealso \itemize{
-#'   \code{\link{install.packages}}
-#'   \code{\link{installed.packages}}
-#'   \code{\link{devtools}}
-#'   \code{\link{devtools::install_github}}
-#'   \code{\link{BiocManager}}
-#'   \code{\link{BiocManager::install}}
-#' }
-#'
-#' @export
-installer <- function(
-    pkg_cran = NULL, pkg_git = NULL, pkg_biocmanager = NULL, update_all = FALSE,
-    contriburl = "https://cloud.r-project.org/") {
-  # Install AND update ALL packages
-  if (isTRUE(update_all)) {
-    # CRAN
-    if (!is.null(pkg_cran)) {
-      install.packages(pkg_cran, dependencies = TRUE, contriburl = contriburl)
-      sapply(pkg_cran, require, character.only = TRUE)
-    }
-    # GitHub
-    if (!is.null(pkg_git)) {
-      if (!require("devtools", quietly = TRUE)) {
-        install.packages("devtools", dependencies = TRUE, contriburl = contriburl)
-      }
-      devtools::install_github(pkg_git, dependencies = TRUE)
-      repo <- sapply(pkg_git, basename)
-      sapply(repo, require, character.only = TRUE)
-    }
-    # BiocManager
-    if (!is.null(pkg_biocmanager)) {
-      if (!require("BiocManager", quietly = TRUE)) {
-        install.packages("BiocManager", dependencies = TRUE, contriburl = contriburl)
-      }
-      BiocManager::install(pkg_biocmanager, dependencies = TRUE)
-      sapply(pkg_biocmanager, require, character.only = TRUE)
-    }
-    # Install ONLY MISSING packages
-  } else if (isFALSE(update_all)) {
-    # CRAN
-    if (!is.null(pkg_cran)) {
-      new_pkg <- pkg_cran[!(pkg_cran %in% installed.packages()[, "Package"])]
-      if (length(new_pkg)) {
-        install.packages(new_pkg, dependencies = TRUE, contriburl = contriburl)
-      }
-      sapply(pkg_cran, require, character.only = TRUE)
-    }
-    # GitHub
-    if (!is.null(pkg_git)) {
-      if (!require("devtools", quietly = TRUE)) {
-        install.packages("devtools", dependencies = TRUE, contriburl = contriburl)
-      }
-      repo <- sapply(pkg_git, basename)
-      new_repo <- repo[!(repo %in% installed.packages()[, "Package"])]
-      if (length(new_repo)) {
-        new_pkg <- pkg_git[sapply(pkg_git, basename) %in% new_repo]
-        devtools::install_github(new_pkg, dependencies = TRUE)
-      }
-      sapply(repo, require, character.only = TRUE)
-    }
-    # BiocManager
-    if (!is.null(pkg_biocmanager)) {
-      if (!require("BiocManager", quietly = TRUE)) {
-        install.packages("BiocManager", dependencies = TRUE, contriburl = contriburl)
-      }
-      new_pkg <- pkg_biocmanager[!(pkg_biocmanager %in% installed.packages()[, "Package"])]
-      if (length(new_pkg)) {
-        BiocManager::install(new_pkg, dependencies = TRUE)
-      }
-      sapply(pkg_biocmanager, require, character.only = TRUE)
-    }
-  }
-}
-
-
-# Install latest release protools2 from GitHub function ----
-#
-#' Update to the latest release of the `protools2` package.
-#'
-#'
-#' @param url String. URL pointing to GitHub release.
-#'
-#' @return None.
-#' @export
-#'
-#' @examples
-#' # As it installs the `devtools2` package, it must not be loaded. Therefore,
-#' # call like so:
-#' devtools2::update_protools()
-update_protools <- function(
-  url = "https://api.github.com/repos/iibadshah/protools2/releases/latest"
-) {
-  require(httr2)
-  # Get latest release
-  req <- httr2::request(url) %>%
-    httr2::req_perform()
-  resp <- httr2::resp_body_json(req)
-  package_archive_file <- resp$assets[[1]]$browser_download_url
-  # Install
-  install.packages(package_archive_file)
-}
-
-
 # Edited `protools2::normalize_areas_return_ppindex()` ----
 # Phosphoproteomics.Rmd:
 # Original function mistakenly used object name not of parameter, but of object in
-# global environment. This meant that `df.combi` was created using original not FIXED xlsx
+# global environment. This meant that `df.combi` was using original from global scope not from argument
 normalize_areas_return_ppindex_edit <- function(
     pescal_output_file,
-    delta_score_cut_off = 1
+    delta_score_cut_off = 0
 ) {
+  # Set delta_score_cut_off to low (say 1) for proteomics data,
+  # High (say 15) for phosphoproteomics data
   library(foreach)
   library(doParallel)
   suppressMessages(
@@ -418,16 +154,19 @@ normalize_areas_return_ppindex_edit <- function(
   suppressMessages(
     df.combi <- readxl::read_excel(pescal_output_file, "combiPeptData")  # Original `pescal.output.file` object is accessed from global scope
   )
+
+  # select peptides above the delta_score_cut_off
   df.combi <- subset(df.combi, df.combi$max_delta_score > delta_score_cut_off)
-  peptides <- unique(unlist(df.combi[, 25]))
+  peptides <- unique(unlist(df.combi[, 25]))  # 'sites'
   df.areas <- df.areas[df.areas$db_id %in% df.combi$db_id, ]
   cols <- colnames(dplyr::select_if(df.areas, is.numeric))
   df.areas.n <- data.frame(
     ids = df.areas$db_id,
     scale(df.areas[, cols], center = F, scale = colSums(df.areas[, cols]))
   )
+
   cores = detectCores()
-  cl <- makeCluster(cores[1] - 1)
+  cl <- makeCluster(cores[1] - 1)  # not to overload your computer
   registerDoParallel(cl)
   t1 <- Sys.time()
   df <- foreach(p = peptides, .combine = "rbind") %dopar%
@@ -439,25 +178,64 @@ normalize_areas_return_ppindex_edit <- function(
   df.norm <- data.frame(sites = peptides, df * 1e+06)
   rownames(df.norm) <- df.norm$sites
   df.norm[df.norm == 0] <- NA
+
   df.norm.log2.centered <- data.frame(
     sites = peptides,
     scale(log2(df.norm[, cols]), scale = F)
   )
+
   df.norm.log2.centered.scaled <- data.frame(
     sites = peptides,
     scale(log2(df.norm[, cols]))
   )
+
+  # Alternative na imputation
+  # Centred & scaled
   df.norm.log2.centered.scaled.na.imputed <- df.norm.log2.centered.scaled
-  df.norm.log2.centered.scaled.na.imputed[
-    is.na(df.norm.log2.centered.scaled.na.imputed)
-  ] <- min(df.norm.log2.centered.scaled.na.imputed[, cols], na.rm = T) / 5
+  df.norm.log2.centered.scaled.na.imputed1 <- df.norm.log2.centered.scaled
+  df.norm.log2.centered.scaled.na.imputed2 <- df.norm.log2.centered.scaled
+
+  df.norm.log2.centered.scaled.na.imputed[cols] <- lapply(
+    df.norm.log2.centered.scaled.na.imputed[cols], function(x){
+      replace(x, is.na(x), min(x, na.rm = TRUE) -1) # Correct NA imputation
+    }
+  )
+
+  df.norm.log2.centered.scaled.na.imputed1[
+    is.na(df.norm.log2.centered.scaled.na.imputed1)
+  ] <- min(df.norm.log2.centered.scaled.na.imputed1[,cols], na.rm = T) / 5
+
+  df.norm.log2.centered.scaled.na.imputed2[cols] <- lapply(
+    df.norm.log2.centered.scaled.na.imputed2[cols], function(x){
+      replace(x, is.na(x), min(x, na.rm = TRUE)) # Correct NA imputation
+    }
+  )
+
+  # Scaled
+  df.norm.log2.centered.na.imputed <- df.norm.log2.centered
+  df.norm.log2.centered.na.imputed[cols] <- lapply(
+    df.norm.log2.centered.na.imputed[cols], function(x){
+      replace(x, is.na(x), min(x, na.rm = TRUE) -1) # Correct NA imputation
+    }
+  )
+
+  # Previous na imputation
+  # df.norm.log2.centered.scaled.na.imputed <- df.norm.log2.centered.scaled
+  # df.norm.log2.centered.scaled.na.imputed[
+  #   is.na(df.norm.log2.centered.scaled.na.imputed)
+  # ] <- min(df.norm.log2.centered.scaled.na.imputed[, cols], na.rm = T) / 5
+
   rownames(df.norm.log2.centered) <- df.norm.log2.centered$sites
   rownames(df.norm.log2.centered.scaled) <- df.norm.log2.centered.scaled$sites
+
   return(list(
     normalized.data = df.norm,
     normalized.plus.log2.cent.data = df.norm.log2.centered,
     normalized.plus.log2.cent.scaled.data = df.norm.log2.centered.scaled,
-    df.norm.log2.centered.scaled.na.imputed = df.norm.log2.centered.scaled.na.imputed
+    df.norm.log2.centered.scaled.na.imputed = df.norm.log2.centered.scaled.na.imputed,
+    df.norm.log2.centered.na.imputed=df.norm.log2.centered.na.imputed,
+    df.norm.log2.centered.scaled.na.imputed1=df.norm.log2.centered.scaled.na.imputed1,
+    df.norm.log2.centered.scaled.na.imputed2=df.norm.log2.centered.scaled.na.imputed2
   ))
 }
 
@@ -465,7 +243,7 @@ normalize_areas_return_ppindex_edit <- function(
 # Edited `protools2::normalize_areas_return_protein_groups()` ----
 # Proteomics.Rmd:
 # Original function mistakenly used object name not of parameter, but of object in
-# global environment. This meant that `df.combi` was created using original not FIXED xlsx
+# global environment. This meant that `df.combi` was using original from global scope not from argument
 normalize_areas_return_protein_groups_edit <- function(
     pescal_output_file,
     mascot.score.cut.off = 50,
@@ -478,15 +256,21 @@ normalize_areas_return_protein_groups_edit <- function(
   suppressMessages(
     df.combi <- data.frame(readxl::read_excel(pescal_output_file, "combiPeptData"))  # Original `pescal.output.file` object is accessed from global scope
   )
+
+  # normalise areas
   cols <- colnames(dplyr::select_if(df.areas, is.numeric))
   df.areas.n <- data.frame(
     ids = df.areas$db_id,
     scale(df.areas[, cols], center = F, scale = colSums(df.areas[, cols]))
   )
-  protein.groups <- na.omit(unique(unlist(df.combi[, 29])))
+
+  # find protein groups
+  protein.groups <- na.omit(unique(unlist(df.combi[, 29])))  # 29 = genes
   n.protein.groups <- length(protein.groups)
+
+  # group peptides by protein group
   cores = detectCores()
-  cl <- makeCluster(cores[1] - 1)
+  cl <- makeCluster(cores[1] - 1)  # not to overload your computer
   registerDoParallel(cl)
   t1 <- Sys.time()
   df <- foreach(p = protein.groups, .combine = "rbind") %dopar%
@@ -511,34 +295,50 @@ normalize_areas_return_protein_groups_edit <- function(
       )
     }
   stopCluster(cl)
+
   write.csv(df, "temp.csv")
   x <- read.csv("temp.csv")
   x[x == 0] <- NA
   df.norm <- data.frame(protein.group = x$protein.group, x[, cols] * 1e+06)
+
   df.norm.log2.centered <- data.frame(
     protein.group = protein.groups,
     scale(log2(df.norm[, cols]), scale = F)
   )
+
   df.norm.log2.centered.scaled <- data.frame(
     protein.group = protein.groups,
     scale(log2(df.norm[, cols]))
   )
+
   df.norm.log2.centered.scaled.na.imputed <- df.norm.log2.centered.scaled
-  df.norm.log2.centered.scaled.na.imputed[
-    is.na(df.norm.log2.centered.scaled.na.imputed)
-  ] <- min(df.norm.log2.centered.scaled.na.imputed[, cols], na.rm = T) / 5
+
+  # df.norm.log2.centered.scaled.na.imputed[  # Previous na imputation
+  #   is.na(df.norm.log2.centered.scaled.na.imputed)
+  # ] <- min(df.norm.log2.centered.scaled.na.imputed[, cols], na.rm = T) / 5
+
+  df.norm.log2.centered.scaled.na.imputed[cols] <- lapply(  # New na imputation
+    df.norm.log2.centered.scaled.na.imputed[cols], function(x){
+      replace(x, is.na(x), min(x, na.rm = TRUE) -1) # Correct NA imputation
+    }
+  )
+
   rownames(df.norm.log2.centered) <- df.norm.log2.centered$protein.group
   rownames(df.norm.log2.centered.scaled) <- df.norm.log2.centered.scaled$protein.group
   rownames(df.norm) <- df.norm.log2.centered$protein.group
   rownames(df.norm.log2.centered.scaled.na.imputed) <- df.norm.log2.centered.scaled.na.imputed$protein.group
+
   xx <- x[
     x$best.mascot.score > mascot.score.cut.off &
       x$n.peptides > n.peptide.cut.off, ]
+
   selected.prot.groups <- xx$protein.group
+
   cc <- c(
     "protein.group", "best.mascot.score", "n.peptides",
     "n.psm", "acc", "uniprot.id", "protein.name"
   )
+
   df.norm <- merge.data.frame(df.norm, x[, cc], by = "protein.group")
   df.norm.log2.centered <- merge.data.frame(
     df.norm.log2.centered,
@@ -555,6 +355,7 @@ normalize_areas_return_protein_groups_edit <- function(
     x[, cc],
     by = "protein.group"
   )
+
   return(list(
     normalized.data = df.norm[df.norm$protein.group %in% selected.prot.groups, ],
     normalized.plus.log2.cent.data = df.norm.log2.centered[
@@ -592,9 +393,9 @@ remove_outlier_samples_from_dataset_edit <- function(df, plot=TRUE) {
   cols <- colnames(dplyr::select_if(df, is.numeric))
   cms <- apply(df[, cols], 2, median)
   if (plot) {
-    OutVals <- boxplot(cms)$out
+    OutVals <- boxplot(cms)$out  # main = "Outliers"
   } else {
-    OutVals <- boxplot(cms, plot=FALSE)$out
+    OutVals <- boxplot(cms, plot=FALSE)$out  # main = "Outliers"
   }
   samples.to.be.removed <- names(OutVals)
   if (is.null(samples.to.be.removed)) {
@@ -611,15 +412,15 @@ remove_outlier_samples_from_dataset_edit <- function(df, plot=TRUE) {
 summary.qual.data_edit <- function(df.combi, df.design) {
   df.mods <- data.frame(table(df.combi$pep_mod))
   df.mods.phospho.st <- df.mods[grepl("ST", df.mods$Var1), ]
-  sites <- (df.combi[, 25])
+  sites <- df.combi[, 25]
   phospho.s.unique <- format(
-    nrow((sites[grepl("S", sites$...25, fixed = T), ])), big.mark = ","
+    nrow(sites[grepl("S", sites[[1]], fixed = T), ]), big.mark = ","
   )
   phospho.t.unique <- format(
-    nrow(sites[grepl("(T", sites$...25, fixed = T), ]), big.mark = ","
+    nrow(sites[grepl("(T", sites[[1]], fixed = T), ]), big.mark = ","
   )
   phospho.y.unique <- format(
-    nrow(sites[grepl("(Y", sites$...25, fixed = T), ]), big.mark = ","
+    nrow(sites[grepl("(Y", sites[[1]], fixed = T), ]), big.mark = ","
   )
   n.st.peptides <- sum(df.mods.phospho.st$Freq)
   df.mods.phospho.y <- df.mods[grepl("(Y)", df.mods$Var1, fixed = T), ]
@@ -676,7 +477,7 @@ summary.qual.data.proteomics_edit <- function(
 
 
 # Edited `protools2::pca.plot()` ----
-pca.plot_edit <- function(df, df.design, colorfactor = "", shapefactor = "", legend_position = NULL) {
+pca.plot_edit <- function(df, df.design, colorfactor = "", shapefactor = "", legend_position = NULL, title = "") {
   df <- dplyr::select_if(df, is.numeric)
   res.pca <- prcomp(df, scale = F)
   df.pca <- data.frame(res.pca$rotation)
@@ -698,7 +499,7 @@ pca.plot_edit <- function(df, df.design, colorfactor = "", shapefactor = "", leg
     scale_shape_manual(values = rep(c(1:20), f)) +
     theme_bw() +
     labs(
-      title = "",
+      title = title,
       x = paste("PC1,", round(pc1, digits = 2) * 100, "%"),
       y = paste("PC2,", round(pc2, digits = 2) * 100, "%")
     )
@@ -876,7 +677,7 @@ barplot.top.peptides_edit <- function(
       axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)
     ) +
     labs(
-      title = paste0("Top increased or decreased ", context," in ", graph.heading),
+      title = paste0("Top increased / decreased ", context," in ", graph.heading),
       y = "log2(fold)",
       x = "",
       subtitle = subtitle
@@ -933,9 +734,12 @@ plot.kinase.relationships_edit <- function(ksea.data, graph.title, pval.cutoff) 
     node.1 = pth1, node.2 = pth2, weight = w,
     pvalue.1 = pval1, pvalue.2 = pval2, zscores = zscores,
     counts = counts
-  )
+  ) # POSSIBLY CHECK `if (nrow(df.network) < 2) { return(0) }`
   df.network <- df.network[order(df.network$pvalue.1), ]
-  df.s <- subset(df.network, df.network$weight > 4)
+  df.s <- subset(df.network, df.network$weight > 4) # NOTE: weight subset can produce no results
+  if (nrow(df.s) == 0) {
+    return(0)
+  }
   xx <- reshape2::dcast(df.s, node.1 ~ node.2, value.var = "weight")
   xx[is.na(xx)] <- 0
   rownames(xx) <- xx$node.1
@@ -944,15 +748,17 @@ plot.kinase.relationships_edit <- function(ksea.data, graph.title, pval.cutoff) 
   obs.spp.all <- bipartite.projection(caught.inc)[[2]]
   fr.all <- layout_with_graphopt(obs.spp.all)
   fr.all.df <- as.data.frame(fr.all)
-  fr.all.df$species <- colnames(xx[, 2:ncol(xx)]) # RESULT WAS `NULL` (Now works after `ksea_edit()`)
-  # fr.all.df$species <- colnames(xx[2:ncol(xx)])  # As above now works, this is no longer needed
-
+  fr.all.df$species <- colnames(xx[, 2:ncol(xx)]) # RESULT WAS `NULL` (Now works ? after `ksea_edit()`)
+  if (is.null(colnames(xx[, 2:ncol(xx)]))) {  # possibly `NULL` if nrow() < 2 ?
+    fr.all.df$species <- colnames(xx[2:ncol(xx)])  # As above now works, this is no longer needed (still is needed)
+  }
   # EMPTY DATAFRAME `g` (0 rows, columns = "from", "to"):
-  g <- get.data.frame(obs.spp.all, what = "edges") # WAS EMPTY DATAFRAME (Now works after `ksea_edit()`)
+  g <- get.data.frame(obs.spp.all, what = "edges") # WAS EMPTY DATAFRAME (Now works ? after `ksea_edit()`)
   # Attempt to recreate result of above line:
-  # g <- df.s[, 1:2]  # Added - NO LONGER NEEDED
-  # colnames(g) <- c("from", "to")  # Added - NO LONGER NEEDED
-
+  if (nrow(g) == 0) {
+    g <- df.s[, 1:3]  # Added - NO LONGER NEEDED (still is needed)
+    colnames(g) <- c("from", "to", "weight")  # Added - NO LONGER NEEDED (still is needed)
+  }
   g$from.x <- fr.all.df$V1[match(g$from, fr.all.df$species)]
   g$from.y <- fr.all.df$V2[match(g$from, fr.all.df$species)]
   g$to.x <- fr.all.df$V1[match(g$to, fr.all.df$species)]
@@ -1002,10 +808,18 @@ plot.kinase.relationships_edit <- function(ksea.data, graph.title, pval.cutoff) 
       panel.grid.minor = element_blank(), plot.background = element_blank()
     ) +
     ggtitle(graph.title) +
-    labs(caption = stringr::str_wrap(
-      "Edge weights are proportional to common downstream targets between kinases. Node colors are proportional to z-score of enrichment.",
-      width = 50
-    ))
+    # labs(caption = stringr::str_wrap(
+    #   "Edge weights are proportional to common downstream targets between kinases. Node colors are proportional to z-score of enrichment.",
+    #   width = 75
+    # ))
+    labs(
+      caption = paste(
+        "Edges indicate common neighbours.",
+        "Edge weights are proportional to common downstream targets between kinases.",
+        "Node colors are proportional to z-score of enrichment.",
+        sep = "\n"
+      )
+    )
   pplot
   return(pplot)
 }
@@ -1531,6 +1345,21 @@ ksea_edit <- function(
     x
   }
   stopCluster(cl)
+  # Labels
+  if (ks_db == "ctams") {
+    subtitle <- paste(
+      "Changes in Compound Target Activity Markers (CTAMs)",
+      "by Kinase Substrate Enrichment Analysis (KSEA)",
+      sep = "\n"
+    )
+  } else {
+    subtitle <- "Kinase Substrate Enrichment Analysis (KSEA)"
+  }
+  caption <-  paste(
+    "Kinase activities quantified from changes in substrate phosphorylation.",
+    "Labels indicate significant points.",
+    sep = "\n"
+  )
   df.k.up <- subset(xx, xx$pvalues < pval.cut.off & xx$zscores > 0)
   df.k.do <- subset(xx, xx$pvalues < pval.cut.off & xx$zscores < 0)
   plot.v.ksea.p <- ggplot(xx, aes(x = zscores, y = -log10(pvalues))) +
@@ -1552,8 +1381,8 @@ ksea_edit <- function(
       color = "blue") +
     labs(
       title = graph.heading,
-      subtitle = "Kinase Substrate Enrichment Analysis (KSEA)",
-      caption = "Kinase activities quantified from changes in substrate phosphorylation") +
+      subtitle = subtitle,
+      caption = caption) +
     geom_vline(xintercept = 0, linetype = 2) + theme_bw()
   df.k.up <- subset(xx, xx$qvalue < pval.cut.off & xx$zscores > 0)
   df.k.do <- subset(xx, xx$qvalue < pval.cut.off & xx$zscores < 0)
@@ -1576,8 +1405,8 @@ ksea_edit <- function(
       color = "blue") +
     labs(
       title = graph.heading,
-      subtitle = "Kinase Substrate Enrichment Analysis (KSEA)",
-      caption = "Kinase activities quantified from changes in substrate phosphorylation") +
+      subtitle = subtitle,
+      caption = caption) +
     geom_vline(xintercept = 0, linetype = 2) + theme_bw()
   return(
     list(
@@ -1686,8 +1515,15 @@ complex_heatmap <- function(
     column_title = "",
     legend_title = "",
     fig_width=10,
-    fig_height=nrow(zscores_df) * 0.04
+    fig_height=NULL
 ) {
+
+  # Calculate dynamic figure height
+  if (is.null(fig_height)) {
+    base_height <- 4  # base height when there are no rows
+    height_per_row <- 0.1  # additional height per row
+    fig_height <- base_height + (nrow(zscores_df) * height_per_row)
+  }
 
   # Cell annotation
   df.pp <- data.frame(matrix(nrow = nrow(zscores_df), ncol = ncol(zscores_df)))
@@ -1786,5 +1622,123 @@ complex_heatmap <- function(
         gp = gpar(fontsize = 4)
       )
     }
+  )
+}
+
+
+# UMAP function definition ----
+#' Uniform Manifold Approximation and Projection (UMAP)
+#'
+#' Performs Uniform Manifold Approximation and Projection (UMAP) dimensionality
+#' reduction on a matrix-like object using the \code{\link{umap::umap}} package.
+#'
+#' @param input \code{\link{data.frame}} or \code{\link{matrix}}-like object.
+#' Contains numeric data.
+#' @param label `'numeric'`, `'character'`, or `NULL`. Default `NULL` uses
+#' \code{\link{rownames}}, else labels are taken from the specified column number
+#' (`'numeric'`) or name (`'character'`) and separated from the numeric data.
+#' @param size `'numeric'`. Label text size, default = `3`.
+#' @param max.overlaps `numeric`. \code{\link{ggrepel::geom_label_repel}} `max.overlaps`
+#' parameter to exclude text labels that overlap too many items; default = `10`.
+#' @param title `'character'`. The title of the plot.
+#' @param guide `bool`. Plots the legend if `TRUE`, default `FALSE` does not.
+#'
+#' @return \code{\link{list}}. A list of two elements:
+#' \enumerate{
+#'   \item \code{\link{umap::umap}} object. Containing at least a component with an
+#'   embedding and a component with configuration settings.
+#'   \item \code{\link{ggplot2::ggplot}} object. Plot of the UMAP result.
+#' }
+#' @export
+#'
+#' @section Notes:
+#' The UMAP algorithm is stochastic, so repeated executions will yield different results.
+#'
+#' @section Warnings:
+#' If output:
+#' \preformatted{
+#' `Warning: ggrepel: _ unlabelled data points (too many overlaps). Consider increasing max.overlaps
+#' }
+#' Resolve by any of the following:
+#' \enumerate{
+#'   \item Increase plot viewer size and/or increase chunk options `fig.width` and `fig.height`.
+#'   \item Decrease argument of `size`.
+#'   \item Increase argument of `max.overlaps`.
+#' }
+#'
+#' @seealso
+#' \itemize{
+#'   \item \code{\link{umap::umap}}
+#' }
+#'
+#' @examples
+umap_and_plot <- function(
+    input,
+    label = NULL,
+    size = 3,
+    max.overlaps = getOption("ggrepel.max.overlaps", default = 10),
+    title = "UMAP",
+    guide = FALSE
+) {
+  # Packages
+  require(umap)
+  require(tidyverse)
+  require(ggrepel)
+
+  # Separate data
+  matrix_data <- na.omit(input)
+  if (is.null(label)) {
+    matrix_labels <- rownames(matrix_data)
+  } else if (is.numeric(label)) {
+    matrix_labels <- matrix_data[, label]
+    matrix_data <- matrix_data[, -label]
+  } else if (is.character(label)) {
+    matrix_labels <- matrix_data[, label]
+    matrix_data <- matrix_data[, !(colnames(matrix_data) %in% label)]
+  } else {
+    stop(
+      "Error: `label` must be one of `NULL`, of 'numeric' type, or of 'character' type.
+      Hint: Specify a column in the matrix that contains label information. Default `NULL` uses `rownames`."
+    )
+  }
+
+  # Projection
+  message(paste("UMAP computation start:", format(Sys.time(), "%d-%m-%Y %H:%M:%S")))
+  umap_projection <- umap::umap(
+    matrix_data,
+    n_neighbors = min(nrow(matrix_data) - 1, umap::umap.defaults$n_neighbors)
+  )
+  message(paste("UMAP computation end:", format(Sys.time(), "%d-%m-%Y %H:%M:%S")))
+
+  umap_layout <- as.data.frame(umap_projection$layout)
+  umap_layout <- umap_layout %>%
+    dplyr::mutate(labels = matrix_labels) %>%
+    dplyr::rename(UMAP1 = V1, UMAP2 = V2)
+
+  # Plot
+  plot_umap <- ggplot(
+    umap_layout,
+    aes(
+      x = UMAP1,
+      y = UMAP2,
+      colour = labels
+    )
+  ) +
+    geom_point() +
+    geom_label_repel(
+      aes(label = labels),
+      size = size,
+      max.overlaps = max.overlaps
+    ) +
+    theme_bw() +
+    labs(
+      title = title
+    )
+  # Omit colour legend
+  if (!guide) {
+    plot_umap <- plot_umap + guides(colour = "none")
+  }
+  return(
+    list(umap_projection = umap_projection, plot_umap = plot_umap)
   )
 }
