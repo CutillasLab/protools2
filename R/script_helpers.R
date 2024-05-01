@@ -22,7 +22,8 @@ fix_combiPeptData <- function(
     df.combi = df.combi,
     organism = organism_dbs,
     pescal.xlsx = pescal.output.file,
-    fixed.xlsx = df.combi.fixed.xlsx
+    fixed.xlsx = df.combi.fixed.xlsx,
+    save.xlsx = TRUE
 ) {
   require(tidyverse)
 
@@ -91,12 +92,14 @@ fix_combiPeptData <- function(
     )
 
   # Fix incorrect entries in Excel file
-  # Load existing Pescal Excel
-  wb <- openxlsx::loadWorkbook(pescal.xlsx)
-  # Overwrite combiPeptData sheet
-  openxlsx::writeData(wb, sheet = "combiPeptData", x = df5, colNames = TRUE, rowNames = FALSE)
-  # Save changes to new Excel file
-  openxlsx::saveWorkbook(wb, fixed.xlsx, overwrite = TRUE)
+  if (save.xlsx) {
+    # Load existing Pescal Excel
+    wb <- openxlsx::loadWorkbook(pescal.xlsx)
+    # Overwrite combiPeptData sheet
+    openxlsx::writeData(wb, sheet = "combiPeptData", x = df5, colNames = TRUE, rowNames = FALSE)
+    # Save changes to new Excel file
+    openxlsx::saveWorkbook(wb, fixed.xlsx, overwrite = TRUE)
+  }
 
   rm(df1, df2, df3, df4, wb)
   return(df5)
@@ -135,13 +138,42 @@ mergeDTs <- function(dt_list, by = NULL, all = TRUE, sort = FALSE) {
 }
 
 
+# Impute missing values ----
+# NOTE: Function uses vectorised operations for speed, loops only on columns not rows.
+impute_na <- function(df.design, df.areas) {
+  # Get unique conditions
+  conditions <- unique(df.design$condition)
+
+  # Loop over each unique condition
+  for(condition in conditions) {
+    # Get the columns in df.areas that belong to the current condition
+    cols <- df.design$heading[df.design$condition == condition]
+
+    # Calculate the mean of each row for the current condition, ignoring NA values
+    row_means <- apply(df.areas[, cols], 1, function(x) if(all(is.na(x))) NA else mean(x, na.rm = TRUE))
+
+    # Replace NA values in df.areas for the current condition with the row means
+    for(heading in cols) {
+      is_na <- is.na(df.areas[, heading])
+      df.areas[is_na, heading] <- row_means[is_na]
+
+      # If all values in the row for the current condition are NA, replace NA with the minimum value of the column - 1
+      all_na <- is.na(row_means)
+      df.areas[all_na, heading] <- min(df.areas[, heading], na.rm = TRUE) - 1
+    }
+  }
+
+  return(df.areas)
+}
+
+
 # Edited `protools2::normalize_areas_return_ppindex()` ----
 # Phosphoproteomics.Rmd:
 # Original function mistakenly used object name not of parameter, but of object in
 # global environment. This meant that `df.combi` was using original from global scope not from argument
 normalize_areas_return_ppindex_edit <- function(
     pescal_output_file,
-    delta_score_cut_off = 0
+    delta_score_cut_off = 0  # if (fragpipe) {0} else {5}
 ) {
   # Set delta_score_cut_off to low (say 1) for proteomics data,
   # High (say 15) for phosphoproteomics data
@@ -153,6 +185,9 @@ normalize_areas_return_ppindex_edit <- function(
   colnames(df.areas) <- gsub("-", ".", colnames(df.areas), fixed = T)
   suppressMessages(
     df.combi <- readxl::read_excel(pescal_output_file, "combiPeptData")  # Original `pescal.output.file` object is accessed from global scope
+  )
+  suppressMessages(
+    df.design <- readxl::read_excel(pescal_output_file, "design")
   )
 
   # select peptides above the delta_score_cut_off
@@ -189,8 +224,8 @@ normalize_areas_return_ppindex_edit <- function(
     scale(log2(df.norm[, cols]))
   )
 
-  # Alternative na imputation
-  # Centred & scaled
+  # Alternative NA imputation
+  # Centred + scaled
   df.norm.log2.centered.scaled.na.imputed <- df.norm.log2.centered.scaled
   df.norm.log2.centered.scaled.na.imputed1 <- df.norm.log2.centered.scaled
   df.norm.log2.centered.scaled.na.imputed2 <- df.norm.log2.centered.scaled
@@ -211,15 +246,28 @@ normalize_areas_return_ppindex_edit <- function(
     }
   )
 
-  # Scaled
+  # New improved NA imputation
+  df.norm.log2.centered.scaled.na.imputed.new <- impute_na(
+    df.design = df.design,
+    df.areas = df.norm.log2.centered.scaled
+  )
+
+  # Centred
   df.norm.log2.centered.na.imputed <- df.norm.log2.centered
+
   df.norm.log2.centered.na.imputed[cols] <- lapply(
     df.norm.log2.centered.na.imputed[cols], function(x){
       replace(x, is.na(x), min(x, na.rm = TRUE) -1) # Correct NA imputation
     }
   )
 
-  # Previous na imputation
+  # New improved NA imputation
+  df.norm.log2.centered.na.imputed.new <- impute_na(
+    df.design = df.design,
+    df.areas = df.norm.log2.centered
+  )
+
+  # Previous NA imputation
   # df.norm.log2.centered.scaled.na.imputed <- df.norm.log2.centered.scaled
   # df.norm.log2.centered.scaled.na.imputed[
   #   is.na(df.norm.log2.centered.scaled.na.imputed)
@@ -232,10 +280,12 @@ normalize_areas_return_ppindex_edit <- function(
     normalized.data = df.norm,
     normalized.plus.log2.cent.data = df.norm.log2.centered,
     normalized.plus.log2.cent.scaled.data = df.norm.log2.centered.scaled,
+    df.norm.log2.centered.na.imputed = df.norm.log2.centered.na.imputed,
+    df.norm.log2.centered.na.imputed.new = df.norm.log2.centered.na.imputed.new,
     df.norm.log2.centered.scaled.na.imputed = df.norm.log2.centered.scaled.na.imputed,
-    df.norm.log2.centered.na.imputed=df.norm.log2.centered.na.imputed,
-    df.norm.log2.centered.scaled.na.imputed1=df.norm.log2.centered.scaled.na.imputed1,
-    df.norm.log2.centered.scaled.na.imputed2=df.norm.log2.centered.scaled.na.imputed2
+    df.norm.log2.centered.scaled.na.imputed1 = df.norm.log2.centered.scaled.na.imputed1,
+    df.norm.log2.centered.scaled.na.imputed2 = df.norm.log2.centered.scaled.na.imputed2,
+    df.norm.log2.centered.scaled.na.imputed.new = df.norm.log2.centered.scaled.na.imputed.new
   ))
 }
 
@@ -246,8 +296,8 @@ normalize_areas_return_ppindex_edit <- function(
 # global environment. This meant that `df.combi` was using original from global scope not from argument
 normalize_areas_return_protein_groups_edit <- function(
     pescal_output_file,
-    mascot.score.cut.off = 50,
-    n.peptide.cut.off = 1
+    mascot.score.cut.off = 50,  # if (fragpipe) {0} else {40}
+    n.peptide.cut.off = 1   # if (fragpipe) {0} else {1} ?
 ) {
   suppressMessages(
     df.areas <- data.frame(readxl::read_excel(pescal_output_file, "output_areas"))
@@ -255,6 +305,9 @@ normalize_areas_return_protein_groups_edit <- function(
   colnames(df.areas) <- gsub("-", ".", colnames(df.areas), fixed = T)
   suppressMessages(
     df.combi <- data.frame(readxl::read_excel(pescal_output_file, "combiPeptData"))  # Original `pescal.output.file` object is accessed from global scope
+  )
+  suppressMessages(
+    df.design <- readxl::read_excel(pescal_output_file, "design")
   )
 
   # normalise areas
@@ -311,22 +364,39 @@ normalize_areas_return_protein_groups_edit <- function(
     scale(log2(df.norm[, cols]))
   )
 
+  # Centred
+  # New improved NA imputation
+  df.norm.log2.centered.na.imputed.new <- impute_na(
+    df.design = df.design,
+    df.areas = df.norm.log2.centered
+  )
+
+  # Centred + scaled
   df.norm.log2.centered.scaled.na.imputed <- df.norm.log2.centered.scaled
 
   # df.norm.log2.centered.scaled.na.imputed[  # Previous na imputation
   #   is.na(df.norm.log2.centered.scaled.na.imputed)
   # ] <- min(df.norm.log2.centered.scaled.na.imputed[, cols], na.rm = T) / 5
 
-  df.norm.log2.centered.scaled.na.imputed[cols] <- lapply(  # New na imputation
+  # Correct NA imputation
+  df.norm.log2.centered.scaled.na.imputed[cols] <- lapply(
     df.norm.log2.centered.scaled.na.imputed[cols], function(x){
       replace(x, is.na(x), min(x, na.rm = TRUE) -1) # Correct NA imputation
     }
   )
 
+  # New improved NA imputation
+  df.norm.log2.centered.scaled.na.imputed.new <- impute_na(
+    df.design = df.design,
+    df.areas = df.norm.log2.centered.scaled
+  )
+
+  rownames(df.norm) <- df.norm.log2.centered$protein.group
   rownames(df.norm.log2.centered) <- df.norm.log2.centered$protein.group
   rownames(df.norm.log2.centered.scaled) <- df.norm.log2.centered.scaled$protein.group
-  rownames(df.norm) <- df.norm.log2.centered$protein.group
+  rownames(df.norm.log2.centered.na.imputed.new) <- df.norm.log2.centered.na.imputed.new$protein.group
   rownames(df.norm.log2.centered.scaled.na.imputed) <- df.norm.log2.centered.scaled.na.imputed$protein.group
+  rownames(df.norm.log2.centered.scaled.na.imputed.new) <- df.norm.log2.centered.scaled.na.imputed.new$protein.group
 
   xx <- x[
     x$best.mascot.score > mascot.score.cut.off &
@@ -355,6 +425,16 @@ normalize_areas_return_protein_groups_edit <- function(
     x[, cc],
     by = "protein.group"
   )
+  df.norm.log2.centered.na.imputed.new <- merge.data.frame(
+    df.norm.log2.centered.na.imputed.new,
+    x[, cc],
+    by = "protein.group"
+  )
+  df.norm.log2.centered.scaled.na.imputed.new <- merge.data.frame(
+    df.norm.log2.centered.scaled.na.imputed.new,
+    x[, cc],
+    by = "protein.group"
+  )
 
   return(list(
     normalized.data = df.norm[df.norm$protein.group %in% selected.prot.groups, ],
@@ -363,7 +443,11 @@ normalize_areas_return_protein_groups_edit <- function(
     normalized.plus.log2.cent.scaled.data = df.norm.log2.centered.scaled[
       df.norm.log2.centered.scaled$protein.group %in% selected.prot.groups, ],
     df.norm.log2.centered.scaled.na.imputed = df.norm.log2.centered.scaled.na.imputed[
-      df.norm.log2.centered.scaled.na.imputed$protein.group %in% selected.prot.groups, ]
+      df.norm.log2.centered.scaled.na.imputed$protein.group %in% selected.prot.groups, ],
+    df.norm.log2.centered.na.imputed.new = df.norm.log2.centered.na.imputed.new[
+      df.norm.log2.centered.na.imputed.new$protein.group %in% selected.prot.groups, ],
+    df.norm.log2.centered.scaled.na.imputed.new = df.norm.log2.centered.scaled.na.imputed.new[
+      df.norm.log2.centered.scaled.na.imputed.new$protein.group %in% selected.prot.groups, ]
   ))
 }
 

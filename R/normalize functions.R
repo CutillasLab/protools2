@@ -32,7 +32,7 @@ impute_na <- function(df.design, df.areas) {
 
 
 # Normalise phospho ----
-normalize_areas_return_ppindex_edit <- function(
+normalize_areas_return_ppindex <- function(
     pescal_output_file,
     delta_score_cut_off = 0  # if (fragpipe) {0} else {5}
 ) {
@@ -152,7 +152,7 @@ normalize_areas_return_ppindex_edit <- function(
 
 
 # Normalise total ----
-normalize_areas_return_protein_groups_edit <- function(
+normalize_areas_return_protein_groups <- function(
     pescal_output_file,
     mascot.score.cut.off = 50,  # if (fragpipe) {0} else {40}
     n.peptide.cut.off = 1
@@ -223,6 +223,7 @@ normalize_areas_return_protein_groups_edit <- function(
   )
 
   # Centred
+  # New improved NA imputation
   df.norm.log2.centered.na.imputed.new <- impute_na(
     df.design = df.design,
     df.areas = df.norm.log2.centered
