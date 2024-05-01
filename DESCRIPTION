@@ -1,7 +1,7 @@
 Package: protools2
 Type: Package
 Title: A Set Of Tools For Proteomics And Phosphoproteomics Data Analysis
-Version: 0.2.10
+Version: 0.2.11
 Date: 2024-04-24
 Author: Pedro Rodriguez Cutillas, Irbaz I. Badshah
 Maintainer: Pedro Rodriguez Cutillas <p.cutillas@qmul.ac.uk>
