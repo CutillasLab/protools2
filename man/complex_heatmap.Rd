@@ -11,7 +11,7 @@ complex_heatmap(
   column_title = "",
   legend_title = "",
   fig_width = 10,
-  fig_height = nrow(zscores_df) * 0.04
+  fig_height = NULL
 )
 }
 \arguments{

@@ -61,17 +61,6 @@ Resolve by any of the following:
 }
 }
 
-\examples{
-umap_result <- umap_and_plot(
-  input = data,
-  label = NULL,
-  size = 3,
-  max.overlaps = 15,
-  title = "UMAP",
-  guide = FALSE
-)
-umap_result$plot_umap
-}
 \seealso{
 \itemize{
   \item \code{\link{umap::umap}}
