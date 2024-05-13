@@ -8,14 +8,15 @@ fix_combiPeptData(
   df.combi = df.combi,
   organism = organism_dbs,
   pescal.xlsx = pescal.output.file,
-  fixed.xlsx = df.combi.fixed.xlsx
+  fixed.xlsx = df.combi.fixed.xlsx,
+  save.xlsx = TRUE
 )
 }
 \arguments{
 \item{df.combi}{\code{\link{data.frame}}. combiPeptData.}
 
-\item{organism}{String. One of "human", "mouse", "rat", or "pig". Selects database
-of Uniprot names.}
+\item{organism}{String. One of 'human', 'mouse', 'rat', or 'pig'. Selects
+database of Uniprot names.}
 
 \item{pescal.xlsx}{String. The path ("directory/name") of the Pescal Excel
 output.}
@@ -30,22 +31,4 @@ saves a copy of the Pescal Excel file with the corrected combiPeptData sheet
 \description{
 Fixes incorrect data of pre-processed mass spectrometry Excel file:
 combiPeptData columns 25 and 29.
-}
-\examples{
-# Input
-organism_dbs <- "human"
-file_dir <- "Q:/Path/to/folder"
-pescal.output.file <- paste(file_dir, "file.xlsx", sep = "/")
-df.combi <- readxl::read_excel(pescal.output.file, "combiPeptData")
-df.combi.fixed.xlsx <- paste0(
-  tools::file_path_sans_ext(pescal.output.file), "_FIXED", ".xlsx"
-)
-
-# Execute
-df.combi <- fix_combiPeptData(
-  df.combi = df.combi,
-  organism = organism_dbs,
-  pescal.xlsx = pescal.output.file,
-  fixed.xlsx = df.combi.fixed.xlsx
-)
 }

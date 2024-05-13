@@ -1,5 +1,100 @@
 # Functions to facillitate Proteomics and Phosphoproteomics script execution
 
+# Function to install only missing packages then load all required packages ----
+#' Install multiple missing packages and load.
+#'
+#' Given vectors of CRAN packages, GitHub repositories, and Bioconductor
+#'   packages, checks which are not installed and installs only the missing
+#'   packages/repositories. If `update_all` is `TRUE`, then all packages are
+#'   installed instead, even packages already installed. The function then
+#'   loads all supplied packages.
+#'
+#' @param pkg_cran A character vector of CRAN package names.
+#' @param pkg_git A character vector of GitHub repositories, each in the
+#'   format: `"Username/repository"`.
+#' @param pkg_biocmanager A character vector of Bioconductor package names.
+#' @param update_all A logical. Default `FALSE` only installs missing packages.
+#'   If `TRUE`, the current versions of all packages will be installed.
+#' @param contriburl A character string of the repository mirror URL. See
+#'   \code{\link{install.packages}}.
+#'
+#' @return No return value. Installs missing/all packages and loads all arguments.
+#'
+#' @seealso \itemize{
+#'   \code{\link{install.packages}}
+#'   \code{\link{installed.packages}}
+#'   \code{\link{devtools}}
+#'   \code{\link{devtools::install_github}}
+#'   \code{\link{BiocManager}}
+#'   \code{\link{BiocManager::install}}
+#' }
+#'
+#' @export
+installer <- function(
+    pkg_cran = NULL, pkg_git = NULL, pkg_biocmanager = NULL, update_all = FALSE,
+    contriburl = "https://cloud.r-project.org/") {
+  # Install AND update ALL packages
+  if (isTRUE(update_all)) {
+    # CRAN
+    if (!is.null(pkg_cran)) {
+      install.packages(pkg_cran, dependencies = TRUE, contriburl = contriburl)
+      sapply(pkg_cran, require, character.only = TRUE)
+    }
+    # GitHub
+    if (!is.null(pkg_git)) {
+      if (!require("devtools", quietly = TRUE)) {
+        install.packages("devtools", dependencies = TRUE, contriburl = contriburl)
+      }
+      devtools::install_github(pkg_git, dependencies = TRUE)
+      repo <- sapply(pkg_git, basename)
+      sapply(repo, require, character.only = TRUE)
+    }
+    # BiocManager
+    if (!is.null(pkg_biocmanager)) {
+      if (!require("BiocManager", quietly = TRUE)) {
+        install.packages("BiocManager", dependencies = TRUE, contriburl = contriburl)
+      }
+      BiocManager::install(pkg_biocmanager, dependencies = TRUE)
+      sapply(pkg_biocmanager, require, character.only = TRUE)
+    }
+    # Install ONLY MISSING packages
+  } else if (isFALSE(update_all)) {
+    # CRAN
+    if (!is.null(pkg_cran)) {
+      new_pkg <- pkg_cran[!(pkg_cran %in% installed.packages()[, "Package"])]
+      if (length(new_pkg)) {
+        install.packages(new_pkg, dependencies = TRUE, contriburl = contriburl)
+      }
+      sapply(pkg_cran, require, character.only = TRUE)
+    }
+    # GitHub
+    if (!is.null(pkg_git)) {
+      if (!require("devtools", quietly = TRUE)) {
+        install.packages("devtools", dependencies = TRUE, contriburl = contriburl)
+      }
+      repo <- sapply(pkg_git, basename)
+      new_repo <- repo[!(repo %in% installed.packages()[, "Package"])]
+      if (length(new_repo)) {
+        new_pkg <- pkg_git[sapply(pkg_git, basename) %in% new_repo]
+        devtools::install_github(new_pkg, dependencies = TRUE)
+      }
+      sapply(repo, require, character.only = TRUE)
+    }
+    # BiocManager
+    if (!is.null(pkg_biocmanager)) {
+      if (!require("BiocManager", quietly = TRUE)) {
+        install.packages("BiocManager", dependencies = TRUE, contriburl = contriburl)
+      }
+      new_pkg <- pkg_biocmanager[!(pkg_biocmanager %in% installed.packages()[, "Package"])]
+      if (length(new_pkg)) {
+        BiocManager::install(new_pkg, dependencies = TRUE)
+      }
+      sapply(pkg_biocmanager, require, character.only = TRUE)
+    }
+  }
+}
+
+
 # Fix incorrect combiPeptData gene names ----
 #' Fix incorrect gene names in Pescal Excel file
 #'
