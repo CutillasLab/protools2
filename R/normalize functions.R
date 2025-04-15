@@ -4,35 +4,48 @@
 
 # Impute missing values ----
 # NOTE: Function uses vectorised operations for speed, loops only on columns not rows.
-impute_na <- function(df.design, df.areas) {
-  # Get unique conditions
-  conditions <- unique(df.design$condition)
-
-  # Loop over each unique condition
-  for(condition in conditions) {
-    # Get the columns in df.areas that belong to the current condition
-    cols <- df.design$heading[df.design$condition == condition]
-
-    # Calculate the mean of each row for the current condition, ignoring NA values
-    row_means <- apply(df.areas[, cols], 1, function(x) if(all(is.na(x))) NA else mean(x, na.rm = TRUE))
-
-    # Replace NA values in df.areas for the current condition with the row means
-    for(heading in cols) {
-      is_na <- is.na(df.areas[, heading])
-      df.areas[is_na, heading] <- row_means[is_na]
-
-      # If all values in the row for the current condition are NA, replace NA with the minimum value of the column - 1
-      all_na <- is.na(row_means)
-      df.areas[all_na, heading] <- min(df.areas[, heading], na.rm = TRUE) - 1
-    }
-  }
-
-  return(df.areas)
-}
+# NOTE: See in 'script_helpers.R' where `impute_na()`has been implemented
+#
+# impute_na <- function(df.design, df.areas) {
+#   # Get unique conditions
+#   conditions <- unique(df.design$condition)
+#
+#   # Loop over each unique condition
+#   for (condition in conditions) {
+#     # Get the columns in df.areas that belong to the current condition
+#     cols <- df.design$heading[df.design$condition == condition]
+#
+#     # Calculate the mean of each row for the current condition, ignoring NA values
+#     row_means <- apply(df.areas[, cols], 1, function(x) if (all(is.na(x))) NA else mean(x, na.rm = TRUE))
+#
+#     # Replace NA values in df.areas for the current condition with the row means
+#     for (heading in cols) {
+#       is_na <- is.na(df.areas[, heading])
+#       df.areas[is_na, heading] <- row_means[is_na]
+#
+#       # If all values in the row for the current condition are NA, replace NA with the minimum value of the dataset [new method] (column - 1 [old method])
+#       all_na <- is.na(row_means)
+#       # df.areas[all_na, heading] <- min(df.areas[, heading], na.rm = TRUE) - 1  # min of column (or min - 1)
+#
+#       # Select only numeric columns
+#       numeric_columns <- df.areas[, sapply(df.areas, is.numeric)]
+#
+#       # Apply the min function to the dataset's numeric columns
+#       min_value <- min(numeric_columns, na.rm = TRUE)
+#
+#       # Assign the minimum value minus 1 to the specified location
+#       df.areas[all_na, heading] <- min_value - 1
+#
+#     }
+#   }
+#
+#   return(df.areas)
+# }
 
 
 # Normalise phospho ----
-normalize_areas_return_ppindex <- function(
+# NOTE: See 'script_helpers.R' where the replacement has been implemented
+normalize_areas_return_ppindex_old <- function(
     pescal_output_file,
     delta_score_cut_off = 0  # if (fragpipe) {0} else {5}
 ) {
@@ -152,7 +165,8 @@ normalize_areas_return_ppindex <- function(
 
 
 # Normalise total ----
-normalize_areas_return_protein_groups <- function(
+# NOTE: See 'script_helpers.R' where the replacement has been implemented
+normalize_areas_return_protein_groups_old <- function(
     pescal_output_file,
     mascot.score.cut.off = 50,  # if (fragpipe) {0} else {40}
     n.peptide.cut.off = 1

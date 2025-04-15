@@ -1,7 +1,7 @@
 Package: protools2
 Type: Package
 Title: A Set Of Tools For Proteomics And Phosphoproteomics Data Analysis
-Version: 0.2.12
+Version: 0.2.13
 Date: 2024-05-13
 Authors@R: c(
     person("Pedro", "Cutillas", , "p.cutillas@qmul.ac.uk", role = "aut",
@@ -55,4 +55,4 @@ Imports:
     doParallel,
     limma,
     ComplexHeatmap
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2
