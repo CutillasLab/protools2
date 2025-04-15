@@ -3,7 +3,6 @@
 exportPattern("^[[:alpha:]]+")
 export(complex_heatmap)
 export(fix_combiPeptData)
-export(installer)
 export(mergeDTs)
 export(myHeatMap_With_PValues)
 export(remove_outlier_samples_from_dataset_edit)
