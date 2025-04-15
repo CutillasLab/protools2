@@ -1,5 +1,54 @@
 # Functions to facillitate Proteomics and Phosphoproteomics script execution
 
+if (!exists("update_all")) {
+  update_all <- FALSE
+}
+
+# Required packages - Add packages to the appropriate list ----
+cran_packages <- c(
+  "knitr",
+  "httr2",
+  "miscscripts", # Outdated, not available in current version of R
+  "reticulate",
+  "webshot",
+  "webshot2",
+  "flextable",
+  "kableExtra",
+  "ggpubr",
+  "gplots",
+  "grid", # base package, and should not be updated
+  "gridExtra",
+  "cowplot",
+  "egg",
+  "ggrepel",
+  "reshape2",
+  "viridisLite",
+  "plotly",
+  "heatmaply",
+  "umap",
+  "openxlsx",
+  "readxl",
+  "tools", # base package, and should not be updated
+  "igraph",
+  "data.table",
+  "magrittr",
+  "tibble",
+  "ggplot2",
+  "dplyr",
+  "tidyr",
+  "readr",
+  "purrr",
+  "stringr",
+  "forcats",
+  "dtplyr",
+  "parallel", # base package, and should not be updated
+  "foreach",
+  "doParallel"
+)
+
+git_packages <- NULL
+biocmanager_packages <- c("limma", "ComplexHeatmap")
+
 # Function to install only missing packages then load all required packages ----
 #' Install multiple missing packages and load.
 #'
@@ -94,6 +143,38 @@ installer <- function(
   }
 }
 
+# Install/load required packages ----
+installer(
+  pkg_cran = cran_packages,
+  pkg_git = git_packages,
+  pkg_biocmanager = biocmanager_packages,
+  update_all = update_all
+)
+
+
+# Install protools2 ----
+if (update_all | !require("protools2")) {
+  print("Getting latest protools2 release...")
+  # Get latest release
+  url <- "https://api.github.com/repos/CutillasLab/protools2/releases/latest"
+  req <- httr2::request(url) %>%
+    httr2::req_perform()
+  resp <- httr2::resp_body_json(req)
+  package_archive_file <- resp$assets[[1]]$browser_download_url
+  # Install
+  install.packages(package_archive_file)
+}
+library(protools2)
+
+
+# Required for heatmaply ----
+try(
+  if (update_all) {
+    webshot::install_phantomjs(force = update_all)
+  },
+  silent = TRUE
+)
+
 
 # Fix incorrect combiPeptData gene names ----
 #' Fix incorrect gene names in Pescal Excel file
@@ -118,8 +199,7 @@ fix_combiPeptData <- function(
     organism = organism_dbs,
     pescal.xlsx = pescal.output.file,
     fixed.xlsx = df.combi.fixed.xlsx,
-    save.xlsx = TRUE
-) {
+    save.xlsx = TRUE) {
   require(tidyverse)
 
   # Name columns
@@ -201,6 +281,16 @@ fix_combiPeptData <- function(
 }
 
 
+check_column_names <- function(dt_list, by) {
+  for (i in seq_along(dt_list)) {
+    cat("Checking data table", i, "with columns:", colnames(dt_list[[i]]), "\n")
+    if (!by %in% colnames(dt_list[[i]])) {
+      stop(paste("Column", by, "not found in data table", i))
+    }
+  }
+}
+
+
 # Merge function ----
 #' Merge multiple `data.table`s
 #'
@@ -215,15 +305,16 @@ fix_combiPeptData <- function(
 #' @export
 #'
 #' @examples
-#' DT <- data.table(x=rep(c("b","a","c"),each=3), y=c(1,3,6), v=1:9)
-#' A <- data.table(x=c("c","b"), v=8:7, foo=c(4,2))
+#' DT <- data.table(x = rep(c("b", "a", "c"), each = 3), y = c(1, 3, 6), v = 1:9)
+#' A <- data.table(x = c("c", "b"), v = 8:7, foo = c(4, 2))
 #'
 #' multi_DT <- mergeDTs(
 #'   list(DT, A),
 #'   by = "x",
-#'   all = TRUE  # Outer join
+#'   all = TRUE # Outer join
 #' )
 mergeDTs <- function(dt_list, by = NULL, all = TRUE, sort = FALSE) {
+  # check_column_names(dt_list, by)
   Reduce(
     function(...) {
       merge(..., by = by, all = all, sort = sort)
@@ -232,29 +323,110 @@ mergeDTs <- function(dt_list, by = NULL, all = TRUE, sort = FALSE) {
   )
 }
 
+#' Filter non-empty `data.table`s
+#'
+#' Filters a list of `data.table`s to keep only non-empty tables.
+#'
+#' @param dt_list \code{\link{list}} of \code{\link{data.table}}s.
+#' @param by String. The column to check for non-empty data tables.
+#'
+#' @return A \code{\link{list}} of non-empty \code{\link{data.table}}s.
+#' @export
+#'
+#' @examples
+#' DT1 <- data.table(x = c(1, 2, 3), y = c(4, 5, 6))
+#' DT2 <- data.table(x = c(1, 2, 3), y = c(4, 5, 6))
+#' DT3 <- data.table(x = c(1, 2, 3), y = c(4, 5, 6))
+#' DT4 <- data.table(x = c(1, 2, 3), y = c(4, 5, 6))
+#'
+#' DT_list <- list(DT1, DT2, DT3, DT4)
+#'
+#' filtered_DT_list <- filter_non_empty_DT(DT_list)
+#'
+#' # Check if all data.tables are non-empty
+#' sapply(filtered_DT_list, nrow)
+filter_non_empty_DT <- function(dt_list, by) {
+  Filter(function(dt) nrow(dt) > 0 && by %in% colnames(dt), dt_list)
+}
+
+
+# Swap dashes for dots functions ----
+
+# Use with df.areas, df.combi (retention time section)
+#' Swap dashes for dots in \code{\link{data.frame}}
+#'
+#' Swaps dashes for dots in column names of a \code{\link{data.frame}}.
+#'
+#' @param df \code{\link{data.frame}}. The \code{\link{data.frame}} to rename.
+#'
+#' @return \code{\link{data.frame}}. Renamed \code{\link{data.frame}}.
+#' @export
+#'
+#' @examples
+#' # Assuming `df.areas` is the data frame
+#' df.areas <- swap_dash_for_dot_in_df(df.areas)
+swap_dash_for_dot_in_df <- function(df) {
+  colnames(df) <- gsub("-", ".", colnames(df), fixed = TRUE)
+  return(df)
+}
+
+# Use with df.design, 'heading' column
+#' Swap dashes for dots in a \code{\link{data.frame}} column
+#'
+#' Swaps dashes for dots in the values of a given column of a
+#' \code{\link{data.frame}}.
+#'
+#' @param df \code{\link{data.frame}}. The \code{\link{data.frame}}
+#' containing values to rename.
+#'
+#' @param column_name String. The name of the column containing values
+#' to rename.
+#'
+#' @return \code{\link{data.frame}}. Modified \code{\link{data.frame}}.
+#' @export
+#'
+#' @examples
+#' # Assuming `df.design` is the data frame
+#' df.design <- swap_dash_for_dot_in_col(df.design, "heading")
+swap_dash_for_dot_in_col <- function(df, column_name) {
+  df[[column_name]] <- gsub("-", ".", df[[column_name]])
+  return(df)
+}
+
 
 # Impute missing values ----
 # NOTE: Function uses vectorised operations for speed, loops only on columns not rows.
+#
 impute_na <- function(df.design, df.areas) {
   # Get unique conditions
   conditions <- unique(df.design$condition)
 
   # Loop over each unique condition
-  for(condition in conditions) {
+  for (condition in conditions) {
     # Get the columns in df.areas that belong to the current condition
     cols <- df.design$heading[df.design$condition == condition]
 
     # Calculate the mean of each row for the current condition, ignoring NA values
-    row_means <- apply(df.areas[, cols], 1, function(x) if(all(is.na(x))) NA else mean(x, na.rm = TRUE))
+    row_means <- apply(df.areas[, cols], 1, function(x) if (all(is.na(x))) NA else mean(x, na.rm = TRUE))
 
     # Replace NA values in df.areas for the current condition with the row means
-    for(heading in cols) {
+    for (heading in cols) {
       is_na <- is.na(df.areas[, heading])
       df.areas[is_na, heading] <- row_means[is_na]
 
-      # If all values in the row for the current condition are NA, replace NA with the minimum value of the column - 1
+      # If all values in the row for the current condition are NA, replace NA with the minimum value of the dataset [new method] (column - 1 [old method])
       all_na <- is.na(row_means)
-      df.areas[all_na, heading] <- min(df.areas[, heading], na.rm = TRUE) - 1
+      # df.areas[all_na, heading] <- min(df.areas[, heading], na.rm = TRUE) - 1  # min of column (or min - 1)
+
+      # Select only numeric columns
+      numeric_columns <- df.areas[, sapply(df.areas, is.numeric)]
+
+      # Apply the min function to the dataset's numeric columns
+      min_value <- min(numeric_columns, na.rm = TRUE)
+
+      # Assign the minimum value minus 1 to the specified location
+      df.areas[all_na, heading] <- min_value - 1
+
     }
   }
 
@@ -268,7 +440,7 @@ impute_na <- function(df.design, df.areas) {
 # global environment. This meant that `df.combi` was using original from global scope not from argument
 normalize_areas_return_ppindex_edit <- function(
     pescal_output_file,
-    delta_score_cut_off = 0  # if (fragpipe) {0} else {5}
+    delta_score_cut_off = 0 # if (fragpipe) {0} else {5}
 ) {
   # Set delta_score_cut_off to low (say 1) for proteomics data,
   # High (say 15) for phosphoproteomics data
@@ -279,7 +451,7 @@ normalize_areas_return_ppindex_edit <- function(
   )
   colnames(df.areas) <- gsub("-", ".", colnames(df.areas), fixed = T)
   suppressMessages(
-    df.combi <- readxl::read_excel(pescal_output_file, "combiPeptData")  # Original `pescal.output.file` object is accessed from global scope
+    df.combi <- readxl::read_excel(pescal_output_file, "combiPeptData") # Original `pescal.output.file` object is accessed from global scope
   )
   suppressMessages(
     df.design <- readxl::read_excel(pescal_output_file, "design")
@@ -287,7 +459,7 @@ normalize_areas_return_ppindex_edit <- function(
 
   # select peptides above the delta_score_cut_off
   df.combi <- subset(df.combi, df.combi$max_delta_score > delta_score_cut_off)
-  peptides <- unique(unlist(df.combi[, 25]))  # 'sites'
+  peptides <- unique(unlist(df.combi[, 25])) # 'sites'
   df.areas <- df.areas[df.areas$db_id %in% df.combi$db_id, ]
   cols <- colnames(dplyr::select_if(df.areas, is.numeric))
   df.areas.n <- data.frame(
@@ -295,20 +467,34 @@ normalize_areas_return_ppindex_edit <- function(
     scale(df.areas[, cols], center = F, scale = colSums(df.areas[, cols]))
   )
 
-  cores = detectCores()
-  cl <- makeCluster(cores[1] - 1)  # not to overload your computer
+  cores <- detectCores()
+  cl <- makeCluster(cores[1] - 1) # not to overload your computer
   registerDoParallel(cl)
   t1 <- Sys.time()
-  df <- foreach(p = peptides, .combine = "rbind") %dopar%
-    {
-      ids <- na.omit(df.combi[df.combi[, 25] == p, ]$db_id)
-      apply(df.areas.n[df.areas.n$ids %in% ids, cols], 2, sum)
-    }
+  df <- foreach(p = peptides, .combine = "rbind") %dopar% {
+    ids <- na.omit(df.combi[df.combi[, 25] == p, ]$db_id)
+    apply(df.areas.n[df.areas.n$ids %in% ids, cols], 2, sum)
+  }
   stopCluster(cl)
   df.norm <- data.frame(sites = peptides, df * 1e+06)
   rownames(df.norm) <- df.norm$sites
   df.norm[df.norm == 0] <- NA
 
+  # Normalised NA imputation (no log2, no centre, no scale) ----
+  df.norm.na.imputed <- impute_na(
+    df.design = df.design,
+    df.areas = df.norm
+  )
+
+  # Normalised NA imputation (no log2, no scale, no centre) ----
+  df.norm.na.imputed.no.log2.no.scale.no.centre <- df.norm
+  df.norm.na.imputed.no.log2.no.scale.no.centre[cols] <- lapply(
+    df.norm.na.imputed.no.log2.no.scale.no.centre[cols], function(x) {
+      replace(x, is.na(x), min(x, na.rm = TRUE) / 5) # Correct NA imputation for no log2 (legacy method)
+    }
+  )
+
+  # log2 ----
   df.norm.log2.centered <- data.frame(
     sites = peptides,
     scale(log2(df.norm[, cols]), scale = F)
@@ -320,43 +506,43 @@ normalize_areas_return_ppindex_edit <- function(
   )
 
   # Alternative NA imputation
-  # Centred + scaled
+  # Centred + scaled ----
   df.norm.log2.centered.scaled.na.imputed <- df.norm.log2.centered.scaled
   df.norm.log2.centered.scaled.na.imputed1 <- df.norm.log2.centered.scaled
   df.norm.log2.centered.scaled.na.imputed2 <- df.norm.log2.centered.scaled
-
+  # Correct NA imputation (legacy method)
   df.norm.log2.centered.scaled.na.imputed[cols] <- lapply(
-    df.norm.log2.centered.scaled.na.imputed[cols], function(x){
-      replace(x, is.na(x), min(x, na.rm = TRUE) -1) # Correct NA imputation
+    df.norm.log2.centered.scaled.na.imputed[cols], function(x) {
+      replace(x, is.na(x), min(x, na.rm = TRUE) - 1) # Correct for log2
     }
   )
-
+  # Previous NA imputation (renamed by appending 1)
   df.norm.log2.centered.scaled.na.imputed1[
     is.na(df.norm.log2.centered.scaled.na.imputed1)
-  ] <- min(df.norm.log2.centered.scaled.na.imputed1[,cols], na.rm = T) / 5
-
+  ] <- min(df.norm.log2.centered.scaled.na.imputed1[, cols], na.rm = T) / 5  # Previous incorrect method for log2
+  # Alternate NA imputation (renamed by appending 2)
   df.norm.log2.centered.scaled.na.imputed2[cols] <- lapply(
-    df.norm.log2.centered.scaled.na.imputed2[cols], function(x){
-      replace(x, is.na(x), min(x, na.rm = TRUE)) # Correct NA imputation
+    df.norm.log2.centered.scaled.na.imputed2[cols], function(x) {
+      replace(x, is.na(x), min(x, na.rm = TRUE)) # Alternate NA imputation (not used)
     }
   )
 
-  # New improved NA imputation
+  # New improved NA imputation (log2, centred, scaled) ----
   df.norm.log2.centered.scaled.na.imputed.new <- impute_na(
     df.design = df.design,
     df.areas = df.norm.log2.centered.scaled
   )
 
-  # Centred
+  # Centred ----
   df.norm.log2.centered.na.imputed <- df.norm.log2.centered
-
+  # Correct NA imputation (legacy method)
   df.norm.log2.centered.na.imputed[cols] <- lapply(
-    df.norm.log2.centered.na.imputed[cols], function(x){
-      replace(x, is.na(x), min(x, na.rm = TRUE) -1) # Correct NA imputation
+    df.norm.log2.centered.na.imputed[cols], function(x) {
+      replace(x, is.na(x), min(x, na.rm = TRUE) - 1) # Correct for log2
     }
   )
 
-  # New improved NA imputation
+  # New improved NA imputation (log2, centred) ----
   df.norm.log2.centered.na.imputed.new <- impute_na(
     df.design = df.design,
     df.areas = df.norm.log2.centered
@@ -373,16 +559,20 @@ normalize_areas_return_ppindex_edit <- function(
 
   return(list(
     normalized.data = df.norm,
+    normalized.na.imputed = df.norm.na.imputed,  # New NA imputation (no log2, no centre, no scale)
+    df.norm.na.imputed.no.log2.no.scale.no.centre = df.norm.na.imputed.no.log2.no.scale.no.centre, # legacy NA imputation
     normalized.plus.log2.cent.data = df.norm.log2.centered,
     normalized.plus.log2.cent.scaled.data = df.norm.log2.centered.scaled,
     df.norm.log2.centered.na.imputed = df.norm.log2.centered.na.imputed,
     df.norm.log2.centered.na.imputed.new = df.norm.log2.centered.na.imputed.new,
-    df.norm.log2.centered.scaled.na.imputed = df.norm.log2.centered.scaled.na.imputed,
+    df.norm.log2.centered.scaled.na.imputed = df.norm.log2.centered.scaled.na.imputed,  # Main output legacy
     df.norm.log2.centered.scaled.na.imputed1 = df.norm.log2.centered.scaled.na.imputed1,
     df.norm.log2.centered.scaled.na.imputed2 = df.norm.log2.centered.scaled.na.imputed2,
-    df.norm.log2.centered.scaled.na.imputed.new = df.norm.log2.centered.scaled.na.imputed.new
+    df.norm.log2.centered.scaled.na.imputed.new = df.norm.log2.centered.scaled.na.imputed.new  # Main output new (log2, centre, scale)
   ))
 }
+# Alias for the new function
+normalize_areas_return_ppindex <- normalize_areas_return_ppindex_edit
 
 
 # Edited `protools2::normalize_areas_return_protein_groups()` ----
@@ -391,15 +581,15 @@ normalize_areas_return_ppindex_edit <- function(
 # global environment. This meant that `df.combi` was using original from global scope not from argument
 normalize_areas_return_protein_groups_edit <- function(
     pescal_output_file,
-    mascot.score.cut.off = 50,  # if (fragpipe) {0} else {40}
-    n.peptide.cut.off = 1   # if (fragpipe) {0} else {1} ?
+    mascot.score.cut.off = 50, # if (fragpipe) {0} else {40}
+    n.peptide.cut.off = 1 # if (fragpipe) {0} else {1}
 ) {
   suppressMessages(
     df.areas <- data.frame(readxl::read_excel(pescal_output_file, "output_areas"))
   )
   colnames(df.areas) <- gsub("-", ".", colnames(df.areas), fixed = T)
   suppressMessages(
-    df.combi <- data.frame(readxl::read_excel(pescal_output_file, "combiPeptData"))  # Original `pescal.output.file` object is accessed from global scope
+    df.combi <- data.frame(readxl::read_excel(pescal_output_file, "combiPeptData")) # Original `pescal.output.file` object is accessed from global scope
   )
   suppressMessages(
     df.design <- readxl::read_excel(pescal_output_file, "design")
@@ -413,35 +603,34 @@ normalize_areas_return_protein_groups_edit <- function(
   )
 
   # find protein groups
-  protein.groups <- na.omit(unique(unlist(df.combi[, 29])))  # 29 = genes
+  protein.groups <- na.omit(unique(unlist(df.combi[, 29]))) # 29 = genes
   n.protein.groups <- length(protein.groups)
 
   # group peptides by protein group
-  cores = detectCores()
-  cl <- makeCluster(cores[1] - 1)  # not to overload your computer
+  cores <- detectCores()
+  cl <- makeCluster(cores[1] - 1) # not to overload your computer
   registerDoParallel(cl)
   t1 <- Sys.time()
-  df <- foreach(p = protein.groups, .combine = "rbind") %dopar%
-    {
-      dfx <- df.combi[df.combi[, 29] == p, ]
-      ids <- na.omit(dfx$db_id)
-      best.mascot.score <- max(dfx$max_scr, na.rm = T)
-      protein.name <- dfx$protein[1]
-      acc <- na.omit(dfx$acc_no)[1]
-      uniprot.id <- na.omit(dfx[1, 30])[1]
-      n.peptides <- length(ids)
-      nPSMs <- na.omit(dfx[, "N_peptides"])
-      c(
-        protein.group = p,
-        apply(df.areas.n[df.areas.n$ids %in% ids, cols], 2, sum),
-        best.mascot.score = best.mascot.score,
-        n.peptides = n.peptides,
-        n.psm = sum(nPSMs),
-        acc = acc,
-        uniprot.id = uniprot.id,
-        protein.name = protein.name
-      )
-    }
+  df <- foreach(p = protein.groups, .combine = "rbind") %dopar% {
+    dfx <- df.combi[df.combi[, 29] == p, ]
+    ids <- na.omit(dfx$db_id)
+    best.mascot.score <- max(dfx$max_scr, na.rm = T)
+    protein.name <- dfx$protein[1]
+    acc <- na.omit(dfx$acc_no)[1]
+    uniprot.id <- na.omit(dfx[1, 30])[1]
+    n.peptides <- length(ids)
+    nPSMs <- na.omit(dfx[, "N_peptides"])
+    c(
+      protein.group = p,
+      apply(df.areas.n[df.areas.n$ids %in% ids, cols], 2, sum),
+      best.mascot.score = best.mascot.score,
+      n.peptides = n.peptides,
+      n.psm = sum(nPSMs),
+      acc = acc,
+      uniprot.id = uniprot.id,
+      protein.name = protein.name
+    )
+  }
   stopCluster(cl)
 
   write.csv(df, "temp.csv")
@@ -449,6 +638,21 @@ normalize_areas_return_protein_groups_edit <- function(
   x[x == 0] <- NA
   df.norm <- data.frame(protein.group = x$protein.group, x[, cols] * 1e+06)
 
+  # New normalised NA imputation (no log2, no centre, no scale) ----
+  df.norm.na.imputed <- impute_na(
+    df.design = df.design,
+    df.areas = df.norm
+  )
+
+  # Normalised NA imputation (no log2, no scale, no centre) ----
+  df.norm.na.imputed.no.log2.no.scale.no.centre <- df.norm
+  df.norm.na.imputed.no.log2.no.scale.no.centre[cols] <- lapply(
+    df.norm.na.imputed.no.log2.no.scale.no.centre[cols], function(x) {
+      replace(x, is.na(x), min(x, na.rm = TRUE) / 5) # Correct NA imputation for no log2 (legacy method)
+    }
+  )
+
+  # log2 ----
   df.norm.log2.centered <- data.frame(
     protein.group = protein.groups,
     scale(log2(df.norm[, cols]), scale = F)
@@ -460,7 +664,7 @@ normalize_areas_return_protein_groups_edit <- function(
   )
 
   # Centred
-  # New improved NA imputation
+  # New improved NA imputation (log2, centred) ----
   df.norm.log2.centered.na.imputed.new <- impute_na(
     df.design = df.design,
     df.areas = df.norm.log2.centered
@@ -473,20 +677,22 @@ normalize_areas_return_protein_groups_edit <- function(
   #   is.na(df.norm.log2.centered.scaled.na.imputed)
   # ] <- min(df.norm.log2.centered.scaled.na.imputed[, cols], na.rm = T) / 5
 
-  # Correct NA imputation
+  # Correct NA imputation (legacy method) ----
   df.norm.log2.centered.scaled.na.imputed[cols] <- lapply(
-    df.norm.log2.centered.scaled.na.imputed[cols], function(x){
-      replace(x, is.na(x), min(x, na.rm = TRUE) -1) # Correct NA imputation
+    df.norm.log2.centered.scaled.na.imputed[cols], function(x) {
+      replace(x, is.na(x), min(x, na.rm = TRUE) - 1) # Correct NA imputation for log2
     }
   )
 
-  # New improved NA imputation
+  # New improved NA imputation (log2, centred, scaled) ----
   df.norm.log2.centered.scaled.na.imputed.new <- impute_na(
     df.design = df.design,
     df.areas = df.norm.log2.centered.scaled
   )
 
   rownames(df.norm) <- df.norm.log2.centered$protein.group
+  rownames(df.norm.na.imputed) <- df.norm.log2.centered$protein.group
+  rownames(df.norm.na.imputed.no.log2.no.scale.no.centre) <- df.norm.na.imputed.no.log2.no.scale.no.centre$protein.group
   rownames(df.norm.log2.centered) <- df.norm.log2.centered$protein.group
   rownames(df.norm.log2.centered.scaled) <- df.norm.log2.centered.scaled$protein.group
   rownames(df.norm.log2.centered.na.imputed.new) <- df.norm.log2.centered.na.imputed.new$protein.group
@@ -495,7 +701,8 @@ normalize_areas_return_protein_groups_edit <- function(
 
   xx <- x[
     x$best.mascot.score > mascot.score.cut.off &
-      x$n.peptides > n.peptide.cut.off, ]
+      x$n.peptides > n.peptide.cut.off,
+  ]
 
   selected.prot.groups <- xx$protein.group
 
@@ -505,6 +712,16 @@ normalize_areas_return_protein_groups_edit <- function(
   )
 
   df.norm <- merge.data.frame(df.norm, x[, cc], by = "protein.group")
+  df.norm.na.imputed <- merge.data.frame(
+    df.norm.na.imputed,
+    x[, cc],
+    by = "protein.group"
+  )
+  df.norm.na.imputed.no.log2.no.scale.no.centre <- merge.data.frame(
+    df.norm.na.imputed.no.log2.no.scale.no.centre,
+    x[, cc],
+    by = "protein.group"
+  )
   df.norm.log2.centered <- merge.data.frame(
     df.norm.log2.centered,
     x[, cc],
@@ -533,18 +750,31 @@ normalize_areas_return_protein_groups_edit <- function(
 
   return(list(
     normalized.data = df.norm[df.norm$protein.group %in% selected.prot.groups, ],
+    normalized.na.imputed = df.norm.na.imputed[                                    # New NA imputation (no log2, no centre, no scale)
+      df.norm.na.imputed$protein.group %in% selected.prot.groups,
+    ],
+    df.norm.na.imputed.no.log2.no.scale.no.centre = df.norm.na.imputed.no.log2.no.scale.no.centre[  # Legacy NA imputation
+      df.norm.na.imputed.no.log2.no.scale.no.centre$protein.group %in% selected.prot.groups,
+    ],
     normalized.plus.log2.cent.data = df.norm.log2.centered[
-      df.norm.log2.centered$protein.group %in% selected.prot.groups, ],
+      df.norm.log2.centered$protein.group %in% selected.prot.groups,
+    ],
     normalized.plus.log2.cent.scaled.data = df.norm.log2.centered.scaled[
-      df.norm.log2.centered.scaled$protein.group %in% selected.prot.groups, ],
-    df.norm.log2.centered.scaled.na.imputed = df.norm.log2.centered.scaled.na.imputed[
-      df.norm.log2.centered.scaled.na.imputed$protein.group %in% selected.prot.groups, ],
+      df.norm.log2.centered.scaled$protein.group %in% selected.prot.groups,
+    ],
+    df.norm.log2.centered.scaled.na.imputed = df.norm.log2.centered.scaled.na.imputed[  # Legacy NA imputation
+      df.norm.log2.centered.scaled.na.imputed$protein.group %in% selected.prot.groups,
+    ],
     df.norm.log2.centered.na.imputed.new = df.norm.log2.centered.na.imputed.new[
-      df.norm.log2.centered.na.imputed.new$protein.group %in% selected.prot.groups, ],
-    df.norm.log2.centered.scaled.na.imputed.new = df.norm.log2.centered.scaled.na.imputed.new[
-      df.norm.log2.centered.scaled.na.imputed.new$protein.group %in% selected.prot.groups, ]
+      df.norm.log2.centered.na.imputed.new$protein.group %in% selected.prot.groups,
+    ],
+    df.norm.log2.centered.scaled.na.imputed.new = df.norm.log2.centered.scaled.na.imputed.new[  # Main output, new NA imputation (with log2, centre, scale)
+      df.norm.log2.centered.scaled.na.imputed.new$protein.group %in% selected.prot.groups,
+    ]
   ))
 }
+# Alias for the new function
+normalize_areas_return_protein_groups <- normalize_areas_return_protein_groups_edit
 
 
 # Edited `protools2::remove_outlier_samples_from_dataset()` ----
@@ -568,13 +798,13 @@ normalize_areas_return_protein_groups_edit <- function(
 #' @seealso \code{\link{boxplot}}
 #'
 #' @export
-remove_outlier_samples_from_dataset_edit <- function(df, plot=TRUE) {
+remove_outlier_samples_from_dataset_edit <- function(df, plot = TRUE) {
   cols <- colnames(dplyr::select_if(df, is.numeric))
   cms <- apply(df[, cols], 2, median)
   if (plot) {
-    OutVals <- boxplot(cms)$out  # main = "Outliers"
+    OutVals <- boxplot(cms)$out # main = "Outliers"
   } else {
-    OutVals <- boxplot(cms, plot=FALSE)$out  # main = "Outliers"
+    OutVals <- boxplot(cms, plot = FALSE)$out # main = "Outliers"
   }
   samples.to.be.removed <- names(OutVals)
   if (is.null(samples.to.be.removed)) {
@@ -588,21 +818,29 @@ remove_outlier_samples_from_dataset_edit <- function(df, plot=TRUE) {
 
 # Edited `protools2::summary.qual.data()` ----
 # To handle non-equal replicates in the samples
-summary.qual.data_edit <- function(df.combi, df.design) {
+summary.qual.data_edit <- function(df.combi, df.design, fragpipe) {
   df.mods <- data.frame(table(df.combi$pep_mod))
-  df.mods.phospho.st <- df.mods[grepl("ST", df.mods$Var1), ]
   sites <- df.combi[, 25]
   phospho.s.unique <- format(
-    nrow(sites[grepl("S", sites[[1]], fixed = T), ]), big.mark = ","
+    nrow(sites[grepl("S", sites[[1]], fixed = T), ]),
+    big.mark = ","
   )
   phospho.t.unique <- format(
-    nrow(sites[grepl("(T", sites[[1]], fixed = T), ]), big.mark = ","
+    nrow(sites[grepl("(T", sites[[1]], fixed = T), ]),
+    big.mark = ","
   )
   phospho.y.unique <- format(
-    nrow(sites[grepl("(Y", sites[[1]], fixed = T), ]), big.mark = ","
+    nrow(sites[grepl("(Y", sites[[1]], fixed = T), ]),
+    big.mark = ","
   )
+  if (fragpipe) {
+    df.mods.phospho.st <- df.mods[grepl("S\\(", df.mods$Var1, fixed = TRUE) | grepl("T\\(", df.mods$Var1, fixed = TRUE), ]
+    df.mods.phospho.y <- df.mods[grepl("Y\\(", df.mods$Var1, fixed = TRUE), ]
+  } else {
+    df.mods.phospho.st <- df.mods[grepl("ST", df.mods$Var1), ]
+    df.mods.phospho.y <- df.mods[grepl("(Y)", df.mods$Var1, fixed = T), ]
+  }
   n.st.peptides <- sum(df.mods.phospho.st$Freq)
-  df.mods.phospho.y <- df.mods[grepl("(Y)", df.mods$Var1, fixed = T), ]
   n.y.peptides <- format(sum(df.mods.phospho.y$Freq), big.mark = ",")
   n.peptides.unique <- format(length(unique(unlist(sites))), big.mark = ",")
   n.peptides.total <- format(nrow(df.combi), big.mark = ",")
@@ -631,8 +869,7 @@ summary.qual.data.proteomics_edit <- function(
     df.norm,
     df.design,
     replicates = 0,
-    conditions = 0
-) {
+    conditions = 0) {
   protein.groups <- unique(unlist(df.norm$protein.group))
   n.protein.groups <- format(length(protein.groups), big.mark = ",")
   n.peptides.unique <- format(sum(df.norm$n.peptides), big.mark = ",")
@@ -641,7 +878,7 @@ summary.qual.data.proteomics_edit <- function(
   nruns <- replicates * conditions
   if (replicates == 0) {
     conditions <- length(unique(df.design$condition))
-    replicates <- nruns/conditions
+    replicates <- nruns / conditions
   }
   data.points <- format(nruns * length(protein.groups), big.mark = ",")
   summary.text <- paste(
@@ -668,7 +905,7 @@ pca.plot_edit <- function(df, df.design, colorfactor = "", shapefactor = "", leg
   pc2 <- df.sum$PC2[2]
   pc3 <- df.sum$PC3[2]
   # f <- round(nrow(df.pca)/20)
-  f <- nrow(df.pca)  # Above results in error as too few to create scales.
+  f <- nrow(df.pca) # Above results in error as too few to create scales.
   plot1 <- ggplot(
     df.pca,
     aes_string(x = "PC1", y = "PC2", color = colorfactor, shape = shapefactor)
@@ -699,7 +936,8 @@ pca.plot_edit <- function(df, df.design, colorfactor = "", shapefactor = "", leg
   ) +
     geom_point() +
     scale_color_manual(values = rep(mycolors()$C23, f)) +
-    scale_shape_manual(values = rep(c(1:20), f)) + theme_bw() +
+    scale_shape_manual(values = rep(c(1:20), f)) +
+    theme_bw() +
     labs(
       title = "",
       x = paste("PC2,", round(pc2, digits = 2) * 100, "%"),
@@ -729,8 +967,7 @@ pca.plot_edit <- function(df, df.design, colorfactor = "", shapefactor = "", leg
 
 
 # Edited `protools2::identify_differences_in_comparison_plus_volcano()` ----
-identify_differences_in_comparison_plus_volcano_edit <- function (df, fold.cutoff = 0.5, qval.cutoff = 0.05, graph.header = "")
-{
+identify_differences_in_comparison_plus_volcano_edit <- function(df, fold.cutoff = 0.5, qval.cutoff = 0.05, graph.header = "") {
   colnames(df) <- c("sites", "fold", "pvalue", "qvalue")
   df.up <- subset(df, df$qvalue < qval.cutoff & df$fold > fold.cutoff)
   df.do <- subset(df, df$qvalue < qval.cutoff & df$fold < (-fold.cutoff))
@@ -777,7 +1014,11 @@ identify_differences_in_comparison_plus_volcano_edit <- function (df, fold.cutof
 
 # Edited `protools2::identify_differences_by_pvalue_in_comparison_plus_volcano()` ----
 # Original incorrectly displays duplicated pvalue distribution, so removed repeated plot
-identify_differences_by_pvalue_in_comparison_plus_volcano_edit <- function(df, fold.cutoff = 0.5, pval.cutoff = 0.05, graph.header = "") {
+identify_differences_by_pvalue_in_comparison_plus_volcano_edit <- function(
+    df,
+    fold.cutoff = 0.5,
+    pval.cutoff = 0.05,
+    graph.header = "") {
   colnames(df) <- c("sites", "fold", "pvalue", "qvalue")
   df.up <- subset(df, df$pvalue < pval.cutoff & df$fold >
                     fold.cutoff)
@@ -819,7 +1060,8 @@ identify_differences_by_pvalue_in_comparison_plus_volcano_edit <- function(df, f
     list(
       df.increased = df.up, df.decreased = df.do,
       volcanoplot = plot.volcano.1,
-      pvalue.distributions = cowplot::plot_grid(plot.pval.dist, ggplot() + theme_void())
+      pvalue.distributions = cowplot::plot_grid(plot.pval.dist, ggplot() +
+                                                  theme_void())
       # pvalue.distributions = cowplot::plot_grid(plot.pval.dist, plot.qval.dist)
     )
   )
@@ -833,8 +1075,7 @@ barplot.top.peptides_edit <- function(
     df.do,
     graph.heading = "",
     context = "peptides",
-    subtitle = ""
-) {
+    subtitle = "") {
   df.up$effect <- "Increased"
   df.do$effect <- "Decreased"
   df.up.down <- na.omit(
@@ -856,7 +1097,7 @@ barplot.top.peptides_edit <- function(
       axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)
     ) +
     labs(
-      title = paste0("Top increased / decreased ", context," in ", graph.heading),
+      title = paste0("Top increased / decreased ", context, " in ", graph.heading),
       y = "log2(fold)",
       x = "",
       subtitle = subtitle
@@ -928,15 +1169,15 @@ plot.kinase.relationships_edit <- function(ksea.data, graph.title, pval.cutoff) 
   fr.all <- layout_with_graphopt(obs.spp.all)
   fr.all.df <- as.data.frame(fr.all)
   fr.all.df$species <- colnames(xx[, 2:ncol(xx)]) # RESULT WAS `NULL` (Now works ? after `ksea_edit()`)
-  if (is.null(colnames(xx[, 2:ncol(xx)]))) {  # possibly `NULL` if nrow() < 2 ?
-    fr.all.df$species <- colnames(xx[2:ncol(xx)])  # As above now works, this is no longer needed (still is needed)
+  if (is.null(colnames(xx[, 2:ncol(xx)]))) { # possibly `NULL` if nrow() < 2 ?
+    fr.all.df$species <- colnames(xx[2:ncol(xx)]) # As above now works, this is no longer needed (still is needed)
   }
   # EMPTY DATAFRAME `g` (0 rows, columns = "from", "to"):
   g <- get.data.frame(obs.spp.all, what = "edges") # WAS EMPTY DATAFRAME (Now works ? after `ksea_edit()`)
   # Attempt to recreate result of above line:
   if (nrow(g) == 0) {
-    g <- df.s[, 1:3]  # Added - NO LONGER NEEDED (still is needed)
-    colnames(g) <- c("from", "to", "weight")  # Added - NO LONGER NEEDED (still is needed)
+    g <- df.s[, 1:3] # Added - NO LONGER NEEDED (still is needed)
+    colnames(g) <- c("from", "to", "weight") # Added - NO LONGER NEEDED (still is needed)
   }
   g$from.x <- fr.all.df$V1[match(g$from, fr.all.df$species)]
   g$from.y <- fr.all.df$V2[match(g$from, fr.all.df$species)]
@@ -993,7 +1234,7 @@ plot.kinase.relationships_edit <- function(ksea.data, graph.title, pval.cutoff) 
     # ))
     labs(
       caption = paste(
-        "Edges indicate common neighbours.",
+        "Edges indicate common relations.",
         "Edge weights are proportional to common downstream targets between kinases.",
         "Node colors are proportional to z-score of enrichment.",
         sep = "\n"
@@ -1004,68 +1245,177 @@ plot.kinase.relationships_edit <- function(ksea.data, graph.title, pval.cutoff) 
 }
 
 
+# Edited `protools2::enrichment.from.list` ----
+# Edited to fix "cannot xtfrm data frames" error
+# NOTE: Edit incorporated into `protools2`, overwriting the original function
+# enrichment.from.list <- function(
+#     list.of.peptides,
+#     background.list,
+#     prot_db = c("kegg", "hallmark.genes"),
+#     is.ksea = F
+# )
+# {
+#   ll <- list.of.peptides[
+#     !grepl("_no_mod", list.of.peptides, fixed = T)
+#   ]
+#   ll <- list.of.peptides[
+#     !grepl("no_mod", list.of.peptides, fixed = T)  # Added as `_no_mod` not used in current Pescal
+#   ]
+#   ll <- ll[!grepl("_Phospho (", ll, fixed = T)]  # ? NOTE: what is this purpose: to exclude phospho?
+#   list.of.peptides <- strsplit(ll, ";")
+#   original.list.of.peptides <- list.of.peptides
+#   background.list <- strsplit(background.list, ";")
+#   column.with.priors <- "genes"
+#   df.peptides <- data.frame(
+#     peptides = unlist(original.list.of.peptides),
+#     proteins = unlist(list.of.peptides)
+#   )
+#   if (is.ksea == TRUE) {
+#     column.with.priors <- 3
+#   } else {
+#     x1 <- grepl(")", as.character(list.of.peptides), fixed = T)
+#     if (TRUE %in% x1) {
+#       list.of.peptides <- unlist(lapply(
+#         df.peptides$proteins,
+#         function(x) strsplit(as.character(x), "(", fixed = TRUE)[[1]][1]
+#       ))
+#       df.peptides$proteins <- list.of.peptides
+#       background.list <- unlist(lapply(
+#         background.list,
+#         function(x) strsplit(as.character(x), "(", fixed = TRUE)[[1]][1]
+#       ))
+#     } else {
+#       column.with.priors <- "genes"
+#     }
+#   }
+#   list.of.peptides <- trimws(unlist(list.of.peptides))
+#   background.list <- trimws(unlist(background.list))
+#   df.ks <- protools2::protein_and_ks_sets[[prot_db]]
+#   # df.ks <- df.ks[order(-df.ks[, 2]), ]  # NOTE: source of "cannot xtfrm data frames" error
+#   # `order` function is being applied to a data frame, but it should be applied to a vector
+#   df.ks <- df.ks[order(-df.ks[[2]]), ]  # Solution to above error
+#   nr <- nrow(df.ks)
+#   pathway <- character(nr)
+#   pvalues <- numeric(nr)
+#   enrichment <- numeric(nr)
+#   counts <- numeric(nr)
+#   counts.bg <- numeric(nr)
+#   FDR <- numeric(nr)
+#   proteins <- character(nr)
+#   genes <- character(nr)
+#   m <- length(background.list)
+#   k <- length(list.of.peptides)
+#   bg.size <- numeric(nr)
+#   data.size <- numeric(nr)
+#   r = 1
+#   for (r in 1:nr) {
+#     mym <- df.ks[r, 2]
+#     kinase <- df.ks[r, 1]
+#     if (is.na(mym) == F) {
+#       if (mym > 2) {
+#         substrates <- as.character(df.ks[r, column.with.priors])
+#         ss <- c(unlist(strsplit(substrates, ";")))
+#         start.time <- Sys.time()
+#         q <- length(intersect(ss, list.of.peptides))
+#         j <- length(intersect(ss, background.list))
+#         n <- m - j
+#         if (q > 1 & j > 1) {
+#           prots <- intersect(ss, list.of.peptides)
+#           peptides <- df.peptides[df.peptides$proteins %in% prots, "peptides"]
+#           pvalue <- 1 - phyper(q - 1, j, m - j, k, lower.tail = TRUE, log.p = F)
+#           pathway[r] <- as.character(kinase)
+#           pvalues[r] <- pvalue
+#           enrichment[r] <- round((q/k)/(j/m), digits = 2)
+#           counts[r] <- q
+#           data.size[r] <- k
+#           counts.bg[r] <- j
+#           bg.size[r] <- m
+#           genes[r] <- paste(peptides, collapse = ";")
+#           proteins[r] <- paste(prots, collapse = ";")
+#         }
+#       }
+#       r = r + 1
+#     }
+#   }
+#   results <- data.frame(
+#     pathway, pvalues, enrichment, counts,
+#     data.size, counts.bg, bg.size, proteins, genes
+#   )
+#   if (nrow(results) > 0) {
+#     results <- subset(results, enrichment != 0 & counts > 0)
+#     results <- results[order(-results$enrichment), ]
+#     results$FDR <- p.adjust(results$pvalues, method = "BH")
+#   }
+#   return(results)
+# }
+
+
 # Edited `protools2::pathway_enrichment()` ----
 # Edited to adjust colour scales
-pathway_enrichment_edit <- function (
+pathway_enrichment_edit <- function(
     increased.peptides,
     decreased.peptides,
     background.data,
     prot_dbs = c("kegg", "hallmark.genes", "nci", "process"),
     graph.heading = "",
-    is.ksea = FALSE
-) {
+    is.ksea = FALSE,
+    trim = 75) {  # 1000
   library(foreach)
   library(doParallel)
   background.list <- background.data$protein
-  cores = detectCores()
+  cores <- detectCores()
   cl <- makeCluster(cores[1] - 1)
   registerDoParallel(cl)
   t1 <- Sys.time()
-  enrich.up <- foreach(db = prot_dbs, .combine = "rbind") %dopar%
-    {
-      e <- protools2::enrichment.from.list(
-        list.of.peptides = increased.peptides,
-        background.list,
-        prot_db = db,
-        is.ksea = is.ksea
-      )
-      if (nrow(e) > 0) {
-        e$prot_db <- db
-        if (is.ksea) {
-          e$pathway <- paste0(e$pathway, "_", db)
-        }
-        e
+  enrich.up <- foreach(db = prot_dbs, .combine = rbind, .packages = "protools2") %dopar% {
+    e <- protools2::enrichment.from.list(  # To fix "cannot xtfrm data frames" error, function has been overwritten in `protools2`
+      list.of.peptides = increased.peptides,
+      background.list = background.list,
+      prot_db = db,
+      is.ksea = is.ksea
+    )
+    if (nrow(e) > 0) {
+      e$prot_db <- db
+      if (is.ksea) {
+        e$pathway <- paste0(e$pathway, "_", db)
       }
+      return(e)
+    } else {
+      return(data.frame())
     }
+  }
   stopCluster(cl)
   t2 <- Sys.time()
   cl <- makeCluster(cores[1] - 1)
   registerDoParallel(cl)
   t1 <- Sys.time()
-  enrich.do <- foreach(db = prot_dbs, .combine = "rbind") %dopar%
-    {
-      e <- protools2::enrichment.from.list(
-        list.of.peptides = decreased.peptides,
-        background.list, prot_db = db, is.ksea = is.ksea
-      )
-      if (nrow(e) > 0) {
-        e$prot_db <- db
-        if (is.ksea) {
-          e$pathway <- paste0(e$pathway, "_", db)
-        }
-        e
+  enrich.do <- foreach(db = prot_dbs, .combine = rbind, .packages = "protools2") %dopar% {
+    e <- protools2::enrichment.from.list(
+      list.of.peptides = decreased.peptides,
+      background.list = background.list,
+      prot_db = db,
+      is.ksea = is.ksea
+    )
+    if (nrow(e) > 0) {
+      e$prot_db <- db
+      if (is.ksea) {
+        e$pathway <- paste0(e$pathway, "_", db)
       }
+      return(e)
+    } else {
+      return(data.frame())
     }
+  }
   stopCluster(cl)
   t2 <- Sys.time()
   if (length(enrich.do) > 0 & length(enrich.up) > 0) {
     enrich.up <- enrich.up[order(enrich.up$pvalues), ]
     a <- enrich.up$pathway
-    a <- ifelse(nchar(a) > 50, paste0(strtrim(a, 50), "..."), a)
+    a <- ifelse(nchar(a) > trim, paste0(strtrim(a, trim), "..."), a)
     enrich.up$pathway <- a
     enrich.do <- enrich.do[order(enrich.do$pvalues), ]
     a <- enrich.do$pathway
-    a <- ifelse(nchar(a) > 50, paste0(strtrim(a, 50), "..."), a)
+    a <- ifelse(nchar(a) > trim, paste0(strtrim(a, trim), "..."), a)
     enrich.do$pathway <- a
     enrich.do$effect <- "Decreased"
     enrich.up$effect <- "Increased"
@@ -1073,7 +1423,8 @@ pathway_enrichment_edit <- function (
       enrich.do[1:25, ], enrich.up[1:25, ]
     )
     diff.enrich <- merge.data.frame(
-      enrich.do, enrich.up, by = "pathway", all = T
+      enrich.do, enrich.up,
+      by = "pathway", all = T
     )
     diff.enrich$enrichment.x[is.na(diff.enrich$enrichment.x)] <- 0
     diff.enrich$enrichment.y[is.na(diff.enrich$enrichment.y)] <- 0
@@ -1093,28 +1444,30 @@ pathway_enrichment_edit <- function (
     dif.e.do <- diff.enrich[1:15, ]
     dothis <- 0
     if (dothis == 1) {
-      cores = detectCores()
+      cores <- detectCores()
       cl <- makeCluster(cores[1] - 1)
       registerDoParallel(cl)
       t1 <- Sys.time()
-      enrich.combined <- foreach(db = prot_dbs, .combine = "rbind") %dopar%
-        {
-          e <- protools2::enrichment.from.list(
-            list.of.peptides = c(increased.peptides, decreased.peptides),
-            background.list,
-            prot_db = db,
-            is.ksea = is.ksea
-          )
-          if (nrow(e) > 0) {
-            e$prot_db <- db
-            e
-          }
+      enrich.combined <- foreach(db = prot_dbs, .combine = rbind, .packages = "protools2") %dopar% {
+        # browser() # DEBUG
+        e <- protools2::enrichment.from.list(
+          list.of.peptides = c(increased.peptides, decreased.peptides),
+          background.list,
+          prot_db = db,
+          is.ksea = is.ksea
+        )
+        if (nrow(e) > 0) {
+          e$prot_db <- db
+          return(e)
+          # } else {  # COMMENT OUT
+          # return(data.frame())  # COMMENT OUT
         }
+      }
       stopCluster(cl)
       t2 <- Sys.time()
       enrich.combined <- enrich.combined[order(enrich.combined$pvalues), ]
       a <- enrich.combined$pathway
-      a <- ifelse(nchar(a) > 50, paste0(strtrim(a, 50), "..."), a)
+      a <- ifelse(nchar(a) > trim, paste0(strtrim(a, trim), "..."), a)
       enrich.combined$pathway <- a
       enrich.combined <- enrich.combined[order(enrich.combined$pvalues), ]
       plot.pathways.enrichment.by.counts.combined <- ggplot(
@@ -1126,11 +1479,12 @@ pathway_enrichment_edit <- function (
           title = "Pathway Enrichement Analysis",
           subtitle = "Combined analysis using increased and decreased peptides",
           size = "log2(E)", color = "-log10(q)",
-          x = "# Proteins", y = "") +
+          x = "# Proteins", y = ""
+        ) +
         scale_color_gradient(
           low = "orange", high = "red",
           oob = scales::squish_infinite
-        ) +  # na.value = "red") +
+        ) + # na.value = "red") +
         facet_wrap(~effect, scales = "free") +
         theme_bw()
     }
@@ -1151,7 +1505,7 @@ pathway_enrichment_edit <- function (
       scale_color_gradient2(
         low = "blue", mid = "yellow", high = "red",
         oob = scales::squish_infinite
-      ) +  # na.value = "red") +
+      ) + # na.value = "red") +
       # scale_colour_viridis(option = "turbo") +
       geom_vline(xintercept = 0, linetype = 2) +
       theme_bw()
@@ -1170,7 +1524,7 @@ pathway_enrichment_edit <- function (
       scale_color_gradient(
         low = "orange", high = "red",
         oob = scales::squish_infinite
-      ) +  # na.value = "red") +
+      ) + # na.value = "red") +
       # scale_colour_viridis(option = "plasma") +
       facet_wrap(~effect, scales = "free") +
       theme_bw()
@@ -1187,7 +1541,7 @@ pathway_enrichment_edit <- function (
       scale_color_gradient(
         low = "orange", high = "red",
         oob = scales::squish_infinite
-      ) +  # na.value = "red") +
+      ) + # na.value = "red") +
       facet_wrap(~effect, scales = "free") +
       theme_bw()
     uniprot.data <- protools2::uniprot.names
@@ -1195,42 +1549,40 @@ pathway_enrichment_edit <- function (
     .look.at.proteins.in.pathways <- function(enrich.data) {
       mypathways <- list()
       j <- 1
-      mypathways <- foreach(j = 1:10, .combine = "rbind") %do%
-        {
-          ontology <- enrich.data[j, ]$pathway
-          prots <- unlist(strsplit(enrich.data[j, "proteins"], ";"))
-          prot <- prots[1]
-          dfxx <- foreach(prot = prots, .combine = "rbind") %do%
-            {
-              vv <- background.data[grepl(prot, background.data$protein, fixed = T), ]
-              vv <- vv[order(vv$pvalues), ]
-              vv[1, ]
-            }
-          prots <- unique(unlist(strsplit(dfxx$protein, ";")))
-          df.names <- foreach(
-            ppp = unlist(dfxx$protein), .combine = "rbind") %do% {
-              prot <- unlist(strsplit(ppp, ";"))
-              fff <- foreach(pp = prot, .combine = "rbind") %do%
-                {
-                  p <- strsplit(pp, "(", fixed = T)[[1]][1]
-                  nn <- uniprot.data[grepl(p, uniprot.data$gene.name, fixed = T), ]
-                  accs <- paste0(nn$acc, collapse = ";")
-                  names <- paste0(nn$protein, collapse = ";")
-                  data.frame(protein = ppp, accs, names)
-                }
-              data.frame(
-                protein = ppp,
-                acc = paste0(fff$accs, collapse = ";"),
-                name = paste0(fff$names, collapse = ";")
-              )
-            }
-          df.comb <- merge.data.frame(dfxx, df.names, by = "protein")
-          df.comb$ontology <- ontology
-          df.comb
+      mypathways <- foreach(j = 1:10, .combine = rbind, .packages = "foreach") %do% {
+        ontology <- enrich.data[j, ]$pathway
+        prots <- unlist(strsplit(enrich.data[j, "proteins"], ";"))
+        prot <- prots[1]
+        dfxx <- foreach(prot = prots, .combine = rbind) %do% {
+          vv <- background.data[grepl(prot, background.data$protein, fixed = T), ]
+          vv <- vv[order(vv$pvalues), ]
+          vv[1, ]
         }
+        prots <- unique(unlist(strsplit(dfxx$protein, ";")))
+        df.names <- foreach(
+          ppp = unlist(dfxx$protein), .combine = rbind
+        ) %do% {
+          prot <- unlist(strsplit(ppp, ";"))
+          fff <- foreach(pp = prot, .combine = rbind) %do% {
+            p <- strsplit(pp, "(", fixed = T)[[1]][1]
+            nn <- uniprot.data[grepl(p, uniprot.data$gene.name, fixed = T), ]
+            accs <- paste0(nn$acc, collapse = ";")
+            names <- paste0(nn$protein, collapse = ";")
+            data.frame(protein = ppp, accs, names)
+          }
+          data.frame(
+            protein = ppp,
+            acc = paste0(fff$accs, collapse = ";"),
+            name = paste0(fff$names, collapse = ";")
+          )
+        }
+        df.comb <- merge.data.frame(dfxx, df.names, by = "protein")
+        df.comb$ontology <- ontology
+        df.comb
+      }
       colnames(mypathways)[2] <- "fold"
       mypathways$name.short <- paste(
-        stringr::str_trunc(mypathways$protein, 15), stringr::str_trunc(mypathways$name, 40)
+        stringr::str_trunc(mypathways$protein, trim), stringr::str_trunc(mypathways$name, trim) # 15 -> `trim`; 40 -> `trim`
       )
       p <- strsplit(pp, "(", fixed = T)[[1]][1]
       ff <- data.frame(table(mypathways$ontology))
@@ -1251,7 +1603,8 @@ pathway_enrichment_edit <- function (
             color = "-log10(p)",
             size = "", y = ""
           ) +
-          scale_color_gradient2(low = "seagreen", high = "purple4") +
+          scale_color_gradient2(low = "seagreen", high = "purple") +  # Replaced by below for clarity
+          # scale_color_gradient2(low = "blue", high = "red") +
           theme_bw() +
           theme(plot.title = element_text(hjust = 1))
         list.ont[[ii]] <- list(data.table = h, dot.pot = p)
@@ -1262,19 +1615,18 @@ pathway_enrichment_edit <- function (
     }
     prots.in.increased.pathways <- .look.at.proteins.in.pathways(enrich.up)
     prots.in.decreased.pathways <- .look.at.proteins.in.pathways(enrich.do)
-  }
-  else {
+  } else {
     return(0)
   }
   return(list(
     pathway_enrichment_data = rbind.data.frame(enrich.do, enrich.up),
     delta_pathway_enrichment_data = rbind.data.frame(diff.enrich),
-    plot_delta_enrichment = plot.diff,  # Used in report
-    plot.pathways.enrichment.by.counts = plot.pathways.enrichment.by.counts,  # Used in report
+    plot_delta_enrichment = plot.diff, # Used in report
+    plot.pathways.enrichment.by.counts = plot.pathways.enrichment.by.counts, # Used in report
     plot.pathways.enrichment.by.enrichment = plot.pathways.enrichment.by.enrichment,
     prots.in.increased.pathways = prots.in.increased.pathways,
-    prots.in.decreased.pathways = prots.in.decreased.pathways)
-  )
+    prots.in.decreased.pathways = prots.in.decreased.pathways
+  ))
 }
 
 
@@ -1306,12 +1658,12 @@ plot.ont.vs.prot.relationships_edit <- function(results.ontology.analysis, n.pat
       )
     }
     g <- graph.data.frame(df.network, directed = T)
-    V(g)$type <- bipartite.mapping(g)$type  # Occasionally produces error when `.network.plot()` called for "Decreased" (see below, line 458)
+    V(g)$type <- bipartite.mapping(g)$type # Occasionally produces error when `.network.plot()` called for "Decreased" (see below, line 458)
     # "Error in i_set_vertex_attr(x, attr(value, "name"), index = value, value = attr(value,  : Length of new attribute value must be 1 or 8, the number of target vertices, not 0"
     V(g)$color <- ifelse(V(g)$type, "lightblue", "salmon")
     V(g)$shape <- ifelse(V(g)$type, "circle", "square")
     E(g)$color <- "lightgray"
-    V(g)$label.color <- ifelse(V(g)$type, "black", "purple4")
+    V(g)$label.color <- ifelse(V(g)$type, "black", "purple")  # "purple" <- "purple4"
     V(g)$label.cex <- ifelse(V(g)$type, 0.7, 1.2)
     V(g)$frame.color <- "gray"
     V(g)$size <- ifelse(V(g)$type, 3, 8)
@@ -1353,7 +1705,7 @@ plot.ont.vs.prot.relationships_edit <- function(results.ontology.analysis, n.pat
         ),
         alpha = 1
       ) +
-      scale_colour_manual(values = c(`2` = "purple4", `1` = "black")) +
+      scale_colour_manual(values = c(`2` = "purple", `1` = "black")) +  # "purple" <- "purple4"
       scale_size_manual(values = c(3, 5)) +
       scale_x_continuous(expand = c(0, 1)) +
       scale_y_continuous(expand = c(0, 1)) +
@@ -1375,7 +1727,7 @@ plot.ont.vs.prot.relationships_edit <- function(results.ontology.analysis, n.pat
                     "Increased")
   rresults <- x.inc[order(-x.inc$counts), ]
   my.title <- paste(graph.title, "Increased")
-  plot.inc <- try (
+  plot.inc <- try(
     # plot.inc <-
     .network.plot(),
     silent = TRUE
@@ -1384,9 +1736,9 @@ plot.ont.vs.prot.relationships_edit <- function(results.ontology.analysis, n.pat
                     "Decreased")
   rresults <- x.dec[order(-x.dec$counts), ]
   my.title <- paste(graph.title, "Decreased")
-  plot.dec <- try (
+  plot.dec <- try(
     # plot.dec <-
-    .network.plot(),  # Produces error (see comment above, line 384)
+    .network.plot(), # Produces error (see comment above, line 384)
     silent = TRUE
   )
   # plots_list <- list(plot.inc, plot.dec)
@@ -1418,10 +1770,9 @@ plot.ont.vs.prot.relationships_edit <- function(results.ontology.analysis, n.pat
 kinase.substrate.enrichment_edit <- function(dfx, ks_db, is.ksea = TRUE) {
   dfx <- data.frame(dfx)
   # rownames(dfx) <- make.names(dfx[, 1], unique = T)  # No longer necessary
-  if (is.ksea) {  # Original: `is.ksea == TRUE`
+  if (is.ksea) { # Original: `is.ksea == TRUE`
     column.with.priors <- 3
-  }
-  else {
+  } else {
     x1 <- grepl("(", as.character(dfx[, 1]), fixed = T)
     if (TRUE %in% x1) {
       dfx[, 1] <- unlist(lapply(
@@ -1442,24 +1793,24 @@ kinase.substrate.enrichment_edit <- function(dfx, ks_db, is.ksea = TRUE) {
   results.distance <- numeric(nr)
   results.sites <- character(nr)
   kinases <- character(nr)
-  r = 1
+  r <- 1
   for (r in 1:nr) {
     mym <- df.ks[r, 2]
     kinase <- df.ks[r, 1]
-    if (!is.na(mym)) {  # Changed from `is.na(mym) == F` to `!is.na(mym)`
-      if (mym >= 2) {  # Changed from original `> 2` to `>= 2`
+    if (!is.na(mym)) { # Changed from `is.na(mym) == F` to `!is.na(mym)`
+      if (mym >= 2) { # Changed from original `> 2` to `>= 2`
         substrates <- as.character(df.ks[r, column.with.priors])
         ss <- c(unlist(strsplit(substrates, ";")))
         start.time <- Sys.time()
         # df.xx <- subset(dfx, dfx[, 1] %in% paste(ss, ";", sep = ""))  # Changed to `subset(dfx, dfx[, 1] %in% ss)` below
-        df.xx <- subset(dfx, dfx[, 1] %in% ss)  # Changed from above
+        df.xx <- subset(dfx, dfx[, 1] %in% ss) # Changed from above
         sites <- paste(unlist(rownames(df.xx)), collapse = ";")
         sites <- gsub(";;", ";", sites) # Added
-        if (nrow(df.xx) >= 2) {  # Changed from original `> 2` to `>= 2`
-          df.xx$prot.group <- rep(kinase, nrow(df.xx))  # Edited to correct error, original: `<- kinase`
+        if (nrow(df.xx) >= 2) { # Changed from original `> 2` to `>= 2`
+          df.xx$prot.group <- rep(kinase, nrow(df.xx)) # Edited to correct error, original: `<- kinase`
           sites.x <- data.frame(site = df.xx[, 1])
-          sites.x$kinase <- rep(kinase, nrow(df.xx))  # Edited to correct error, original: `<- kinase`
-          c = 2
+          sites.x$kinase <- rep(kinase, nrow(df.xx)) # Edited to correct error, original: `<- kinase`
+          c <- 2
           ds <- numeric(nc - 1)
           pvals <- numeric(nc - 1)
           zscores <- numeric(nc - 1)
@@ -1468,11 +1819,12 @@ kinase.substrate.enrichment_edit <- function(dfx, ks_db, is.ksea = TRUE) {
           values.all <- na.omit(as.numeric(subset(dfx[, c], dfx[, c] != 0)))
           myvalues <- na.omit(as.numeric(subset(df.xx[, c], df.xx[, c] != 0)))
           pval <- 1
-          tryCatch({
-            myks <- ks.test(values.all, myvalues)
-            pval <- myks$p.value
-          },
-          error = function(e) {}
+          tryCatch(
+            {
+              myks <- ks.test(values.all, myvalues)
+              pval <- myks$p.value
+            },
+            error = function(e) {}
           )
           m <- 0
           q <- 0
@@ -1492,12 +1844,13 @@ kinase.substrate.enrichment_edit <- function(dfx, ks_db, is.ksea = TRUE) {
     }
   }
   xx <- data.frame(
-    kinases, zscores = results.zscores, pvalues = results.pvalues,
+    kinases,
+    zscores = results.zscores, pvalues = results.pvalues,
     m = results.m, distance = results.distance, sites = results.sites,
     kinase_dataset = paste0(kinases, "_", ks_db)
   )
   xx$kinase_group <- unlist(kinases)
-  xx$sites_kinase_dataset <- paste0(results.sites, "_", xx$kinase_dataset)  # To provide a column for unique row names
+  xx$sites_kinase_dataset <- paste0(results.sites, "_", xx$kinase_dataset) # To provide a column for unique row names
   xx <- subset(xx, xx$m > 1)
   xx$qvalue <- p.adjust(xx$pvalues, method = "fdr")
   return(xx)
@@ -1511,11 +1864,10 @@ ksea_edit <- function(
     df.fold,
     ks_db = c("pdts", "psite"),
     graph.heading = "",
-    pval.cut.off = 0.05
-){
+    pval.cut.off = 0.05) {
   library(ggrepel)
   yy <- protools2::expand.phosphopeptide.dataset(df.fold)
-  cores = detectCores()
+  cores <- detectCores()
   cl <- makeCluster(cores[1] - 1)
   registerDoParallel(cl)
   xx <- foreach(db = ks_db, .combine = "rbind") %do% {
@@ -1534,7 +1886,7 @@ ksea_edit <- function(
   } else {
     subtitle <- "Kinase Substrate Enrichment Analysis (KSEA)"
   }
-  caption <-  paste(
+  caption <- paste(
     "Kinase activities quantified from changes in substrate phosphorylation.",
     "Labels indicate significant points.",
     sep = "\n"
@@ -1542,51 +1894,65 @@ ksea_edit <- function(
   df.k.up <- subset(xx, xx$pvalues < pval.cut.off & xx$zscores > 0)
   df.k.do <- subset(xx, xx$pvalues < pval.cut.off & xx$zscores < 0)
   plot.v.ksea.p <- ggplot(xx, aes(x = zscores, y = -log10(pvalues))) +
-    geom_point() + geom_point(
+    geom_point() +
+    geom_point(
       data = df.k.up,
       aes(x = zscores, y = -log10(pvalues), size = m),
-      color = "red") +
+      color = "red"
+    ) +
     geom_label_repel(
       data = df.k.up,
       aes(x = zscores, y = -log10(pvalues), label = kinase_dataset),
-      color = "red") +
+      color = "red"
+    ) +
     geom_point(
       data = df.k.do,
       aes(x = zscores, y = -log10(pvalues), size = m),
-      color = "blue") +
+      color = "blue"
+    ) +
     geom_label_repel(
       data = df.k.do,
       aes(x = zscores, y = -log10(pvalues), label = kinase_dataset),
-      color = "blue") +
+      color = "blue"
+    ) +
     labs(
       title = graph.heading,
       subtitle = subtitle,
-      caption = caption) +
-    geom_vline(xintercept = 0, linetype = 2) + theme_bw()
+      caption = caption
+    ) +
+    geom_vline(xintercept = 0, linetype = 2) +
+    theme_bw()
   df.k.up <- subset(xx, xx$qvalue < pval.cut.off & xx$zscores > 0)
   df.k.do <- subset(xx, xx$qvalue < pval.cut.off & xx$zscores < 0)
   plot.v.ksea.q <- ggplot(xx, aes(x = zscores, y = -log10(qvalue))) +
-    geom_point() + geom_point(
+    geom_point() +
+    geom_point(
       data = df.k.up,
       aes(x = zscores, y = -log10(qvalue), size = m),
-      color = "red") +
+      color = "red"
+    ) +
     geom_label_repel(
       data = df.k.up,
       aes(x = zscores, y = -log10(qvalue), label = kinase_dataset),
-      color = "red") +
+      color = "red"
+    ) +
     geom_point(
       data = df.k.do,
       aes(x = zscores, y = -log10(qvalue), size = m),
-      color = "blue") +
+      color = "blue"
+    ) +
     geom_label_repel(
       data = df.k.do,
       aes(x = zscores, y = -log10(qvalue), label = kinase_dataset),
-      color = "blue") +
+      color = "blue"
+    ) +
     labs(
       title = graph.heading,
       subtitle = subtitle,
-      caption = caption) +
-    geom_vline(xintercept = 0, linetype = 2) + theme_bw()
+      caption = caption
+    ) +
+    geom_vline(xintercept = 0, linetype = 2) +
+    theme_bw()
   return(
     list(
       ksea.data = xx,
@@ -1595,6 +1961,7 @@ ksea_edit <- function(
     )
   )
 }
+
 
 # Edited heatmap ----
 #' Heatmap with p-value significance level labels.
@@ -1610,9 +1977,7 @@ myHeatMap_With_PValues <- function(
     df.zcr,
     df.pval,
     mytitle = "",
-    key.title = "log2Fold"
-) {
-
+    key.title = "log2Fold") {
   # Colours
   palette.breaks <- seq(-1.5, 1.5, 0.1) # these values can be changed if needed
   color.palette <- colorRampPalette(c("blue", "white", "red"))(length(palette.breaks) - 1)
@@ -1623,10 +1988,18 @@ myHeatMap_With_PValues <- function(
     for (rr in 1:nrow(df.pp)) {
       vv <- df.pval[rr, cc]
       if (is.numeric(vv) & is.na(vv) == FALSE) {
-        if (vv < 0.05) { df.pp[rr, cc] <- "*" }
-        if (vv < 0.01) { df.pp[rr, cc] <- "**" }
-        if (vv < 0.005) { df.pp[rr, cc] <- "***" }
-        if (vv > 0.05) { df.pp[rr, cc] <- "" }
+        if (vv < 0.05) {
+          df.pp[rr, cc] <- "*"
+        }
+        if (vv < 0.01) {
+          df.pp[rr, cc] <- "**"
+        }
+        if (vv < 0.005) {
+          df.pp[rr, cc] <- "***"
+        }
+        if (vv > 0.05) {
+          df.pp[rr, cc] <- ""
+        }
       } else {
         df.pp[rr, cc] <- ""
       }
@@ -1693,14 +2066,12 @@ complex_heatmap <- function(
     row_title = "",
     column_title = "",
     legend_title = "",
-    fig_width=10,
-    fig_height=NULL
-) {
-
+    fig_width = 10,
+    fig_height = NULL) {
   # Calculate dynamic figure height
   if (is.null(fig_height)) {
-    base_height <- 4  # base height when there are no rows
-    height_per_row <- 0.1  # additional height per row
+    base_height <- 4 # base height when there are no rows
+    height_per_row <- 0.1 # additional height per row
     fig_height <- base_height + (nrow(zscores_df) * height_per_row)
   }
 
@@ -1782,12 +2153,12 @@ complex_heatmap <- function(
     # Body
     # width =  fig_width - 0.5,   # Heatmap body
     # height =  fig_height - 1.5,  # Heatmap body
-    heatmap_width = unit(fig_width, "inches"),  # Whole figure
-    heatmap_height = unit(fig_height, "inches"),  # Whole figure
+    heatmap_width = unit(fig_width, "inches"), # Whole figure
+    heatmap_height = unit(fig_height, "inches"), # Whole figure
     show_heatmap_legend = TRUE,
     heatmap_legend_param = list(
       legend_direction = "horizontal", # "vertical",
-      title_position = "topcenter",  # "leftcenter", # "leftcenter-rot",
+      title_position = "topcenter", # "leftcenter", # "leftcenter-rot",
       title = paste0("\n\n\n\n\n\n\n\n", legend_title),
       title_gp = gpar(fontsize = 5, fontface = "plain"),
       labels_gp = gpar(fontsize = 5)
@@ -1857,8 +2228,7 @@ umap_and_plot <- function(
     size = 3,
     max.overlaps = getOption("ggrepel.max.overlaps", default = 10),
     title = "UMAP",
-    guide = FALSE
-) {
+    guide = FALSE) {
   # Packages
   require(umap)
   require(tidyverse)

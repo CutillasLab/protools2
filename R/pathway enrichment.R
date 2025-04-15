@@ -654,65 +654,176 @@ pathway_enrichment <- function(increased.peptides,
 
 }
 
+
+# NOTE: Function replaced with modified version that follows to fix certain errors
+# enrichment.from.list <- function(
+#         list.of.peptides,
+#          background.list,
+#          prot_db= c("kegg","hallmark.genes"), is.ksea=F){
+#
+#   # Returns enrichment of phosphosites, proteins or transcripts in pathways ontologies or kinase-phosphosite relationsips
+#   #
+#   # list of peptides is the list of proteins, phosphosites or transcripts to be searched (transcripts needt o be converted to Uniprot names)
+#   # Accepts Uniprot names or phosphosite names in the form gene(xy), were gene = uniprot gene name; x=S, T or Y; y= amino acid position of phosphorylation
+#   # background.list is the background list of of proteins, phosphosites or transcripts
+#   # prot_db = any suitable ontology or kinase-substrate database
+#   # is.ksea = change to TRUE for analysing phosphoproteomics data against kinase-substrates
+#   # draw.tables.and.plots = if TRUE draws volcano plots of the enrichment data, requires ggplot2
+#   #
+#   # Enrichment = (q/k)/(j/m), where:
+#   #   q = peptides/proteins in list.of.peptides with a match in the ontology/K-S relationship dataset
+#   #   k = number of peptides/proteins in list.of.peptides
+#   #   j = peptides/proteins in background.list with a match in the ontology/K-S relationship dataset
+#   #   m = number of peptides/proteins in background.list
+#   #
+#   # p-values are calculated using the hypergeometric function and adjusted by FDR method
+#   #
+#
+#   ll <- list.of.peptides[!grepl("_no_mod",list.of.peptides,fixed = T)]
+#   ll <- ll[!grepl("_Phospho (",ll,fixed=T)]
+#   list.of.peptides <- strsplit(ll,";")
+#   original.list.of.peptides <- list.of.peptides
+#   background.list <- strsplit(background.list,";")
+#   column.with.priors <- "genes"
+#
+#   df.peptides <- data.frame(peptides=unlist(original.list.of.peptides),
+#                             proteins=unlist(list.of.peptides))
+#
+#   if (is.ksea==TRUE){
+#     column.with.priors <- 3
+#   }else{
+#
+#     #Convert phosphopeptides to genes for phosphoproteomics data when matching to proteomics sets
+#     x1 <-  grepl(")", as.character(list.of.peptides),fixed=T)
+#     if (TRUE %in% x1){ # True if phosphoproteomics data, false if proteomics data
+#       list.of.peptides <- unlist(lapply(df.peptides$proteins,
+#              function(x) strsplit(as.character(x),"(",fixed = TRUE)[[1]][1]))
+#       df.peptides$proteins <- list.of.peptides
+#
+#       background.list <- unlist(lapply(background.list,
+#                                         function(x) strsplit(as.character(x),"(",fixed = TRUE)[[1]][1]))
+#     }else{
+#       column.with.priors <- "genes"
+#     }
+#   }
+#
+#   list.of.peptides <- trimws (unlist(list.of.peptides))
+#   background.list <- trimws(  unlist(background.list))
+#   ####################
+#
+#   df.ks <- protools2::protein_and_ks_sets[[prot_db]]
+#   df.ks <- df.ks[order(-df.ks[,2]),]
+#   nr <- nrow(df.ks)
+#
+#   pathway <- character(nr)
+#   pvalues <- numeric(nr)
+#   enrichment <- numeric(nr)
+#   counts <- numeric(nr)
+#   counts.bg <- numeric(nr)
+#   FDR <- numeric(nr)
+#   proteins <- character(nr)
+#   genes <- character(nr)
+#
+#   m <- length(background.list)
+#   k <- length(list.of.peptides)
+#
+#   bg.size <- numeric(nr)
+#   data.size <- numeric(nr)
+#   r=1
+#   for (r in 1:nr) {
+#     mym <- df.ks[r,2]
+#     kinase <- df.ks[r,1]
+#     if (is.na(mym) == F){
+#       if(mym>2){
+#         substrates <- as.character(df.ks[r,column.with.priors])
+#         ss <- c(unlist(strsplit(substrates,";")))
+#         #if (is.ksea==TRUE | is.ksea==T){
+#         #  ss <- paste(ss,";",sep = "")
+#         #}
+#         start.time <- Sys.time()
+#
+#         q <- length(intersect(ss,list.of.peptides))
+#         j <- length(intersect(ss,background.list))
+#         n <- m-j
+#
+#         if (q>1 & j>1){
+#           prots <- intersect(ss,list.of.peptides)
+#           peptides <- df.peptides[df.peptides$proteins %in% prots,"peptides"]
+#           pvalue <- 1-phyper(q-1,j,m-j,k,lower.tail = TRUE, log.p = F)
+#           pathway[r] <- as.character(kinase)
+#           pvalues[r] <- pvalue
+#           enrichment[r] <- round((q/k)/(j/m), digits = 2)
+#           counts[r] <- q
+#           data.size[r] <- k
+#           counts.bg[r] <- j
+#           bg.size[r] <- m
+#           genes[r] <- paste(peptides,collapse = ";")
+#           proteins[r] <- paste(prots,collapse = ";")
+#         }
+#       }
+#       r=r+1
+#     }
+#   }
+#   results <- data.frame(pathway, pvalues,enrichment,counts, data.size,counts.bg,bg.size, proteins,genes)
+#   #results <- na.omit(results)
+#   if (nrow(results)>0){
+#
+#     results <- subset(results, enrichment!=0 & counts>0)
+#     results <- results[order(-results$enrichment),]
+#     results$FDR <- p.adjust(results$pvalues, method = "BH")
+#   }
+#   return(results)
+# }
+
+# Edited `protools2::enrichment.from.list` ----
+# Edited to fix "cannot xtfrm data frames" error
 enrichment.from.list <- function(
-        list.of.peptides,
-         background.list,
-         prot_db= c("kegg","hallmark.genes"), is.ksea=F){
-
-  # Returns enrichment of phosphosites, proteins or transcripts in pathways ontologies or kinase-phosphosite relationsips
-  #
-  # list of peptides is the list of proteins, phosphosites or transcripts to be searched (transcripts needt o be converted to Uniprot names)
-  # Accepts Uniprot names or phosphosite names in the form gene(xy), were gene = uniprot gene name; x=S, T or Y; y= amino acid position of phosphorylation
-  # background.list is the background list of of proteins, phosphosites or transcripts
-  # prot_db = any suitable ontology or kinase-substrate database
-  # is.ksea = change to TRUE for analysing phosphoproteomics data against kinase-substrates
-  # draw.tables.and.plots = if TRUE draws volcano plots of the enrichment data, requires ggplot2
-  #
-  # Enrichment = (q/k)/(j/m), where:
-  #   q = peptides/proteins in list.of.peptides with a match in the ontology/K-S relationship dataset
-  #   k = number of peptides/proteins in list.of.peptides
-  #   j = peptides/proteins in background.list with a match in the ontology/K-S relationship dataset
-  #   m = number of peptides/proteins in background.list
-  #
-  # p-values are calculated using the hypergeometric function and adjusted by FDR method
-  #
-
-  ll <- list.of.peptides[!grepl("_no_mod",list.of.peptides,fixed = T)]
-  ll <- ll[!grepl("_Phospho (",ll,fixed=T)]
-  list.of.peptides <- strsplit(ll,";")
+    list.of.peptides,
+    background.list,
+    prot_db = c("kegg", "hallmark.genes"),
+    is.ksea = F
+)
+{
+  ll <- list.of.peptides[
+    !grepl("_no_mod", list.of.peptides, fixed = T)
+  ]
+  ll <- list.of.peptides[
+    !grepl("no_mod", list.of.peptides, fixed = T)  # Added as `_no_mod` not used in current Pescal
+  ]
+  ll <- ll[!grepl("_Phospho (", ll, fixed = T)]  # ? NOTE: what is this purpose: to exclude phospho?
+  list.of.peptides <- strsplit(ll, ";")
   original.list.of.peptides <- list.of.peptides
-  background.list <- strsplit(background.list,";")
+  background.list <- strsplit(background.list, ";")
   column.with.priors <- "genes"
-
-  df.peptides <- data.frame(peptides=unlist(original.list.of.peptides),
-                            proteins=unlist(list.of.peptides))
-
-  if (is.ksea==TRUE){
+  df.peptides <- data.frame(
+    peptides = unlist(original.list.of.peptides),
+    proteins = unlist(list.of.peptides)
+  )
+  if (is.ksea == TRUE) {
     column.with.priors <- 3
-  }else{
-
-    #Convert phosphopeptides to genes for phosphoproteomics data when matching to proteomics sets
-    x1 <-  grepl(")", as.character(list.of.peptides),fixed=T)
-    if (TRUE %in% x1){ # True if phosphoproteomics data, false if proteomics data
-      list.of.peptides <- unlist(lapply(df.peptides$proteins,
-             function(x) strsplit(as.character(x),"(",fixed = TRUE)[[1]][1]))
+  } else {
+    x1 <- grepl(")", as.character(list.of.peptides), fixed = T)
+    if (TRUE %in% x1) {
+      list.of.peptides <- unlist(lapply(
+        df.peptides$proteins,
+        function(x) strsplit(as.character(x), "(", fixed = TRUE)[[1]][1]
+      ))
       df.peptides$proteins <- list.of.peptides
-
-      background.list <- unlist(lapply(background.list,
-                                        function(x) strsplit(as.character(x),"(",fixed = TRUE)[[1]][1]))
-    }else{
+      background.list <- unlist(lapply(
+        background.list,
+        function(x) strsplit(as.character(x), "(", fixed = TRUE)[[1]][1]
+      ))
+    } else {
       column.with.priors <- "genes"
     }
   }
-
-  list.of.peptides <- trimws (unlist(list.of.peptides))
-  background.list <- trimws(  unlist(background.list))
-  ####################
-
+  list.of.peptides <- trimws(unlist(list.of.peptides))
+  background.list <- trimws(unlist(background.list))
   df.ks <- protools2::protein_and_ks_sets[[prot_db]]
-  df.ks <- df.ks[order(-df.ks[,2]),]
+  # df.ks <- df.ks[order(-df.ks[, 2]), ]  # NOTE: source of "cannot xtfrm data frames" error
+  # `order` function is being applied to a data frame, but it should be applied to a vector
+  df.ks <- df.ks[order(-df.ks[[2]]), ]  # Solution to above error
   nr <- nrow(df.ks)
-
   pathway <- character(nr)
   pvalues <- numeric(nr)
   enrichment <- numeric(nr)
@@ -721,33 +832,26 @@ enrichment.from.list <- function(
   FDR <- numeric(nr)
   proteins <- character(nr)
   genes <- character(nr)
-
   m <- length(background.list)
   k <- length(list.of.peptides)
-
   bg.size <- numeric(nr)
   data.size <- numeric(nr)
-  r=1
+  r = 1
   for (r in 1:nr) {
-    mym <- df.ks[r,2]
-    kinase <- df.ks[r,1]
-    if (is.na(mym) == F){
-      if(mym>2){
-        substrates <- as.character(df.ks[r,column.with.priors])
-        ss <- c(unlist(strsplit(substrates,";")))
-        #if (is.ksea==TRUE | is.ksea==T){
-        #  ss <- paste(ss,";",sep = "")
-        #}
+    mym <- df.ks[r, 2]
+    kinase <- df.ks[r, 1]
+    if (is.na(mym) == F) {
+      if (mym > 2) {
+        substrates <- as.character(df.ks[r, column.with.priors])
+        ss <- c(unlist(strsplit(substrates, ";")))
         start.time <- Sys.time()
-
-        q <- length(intersect(ss,list.of.peptides))
-        j <- length(intersect(ss,background.list))
-        n <- m-j
-
-        if (q>1 & j>1){
-          prots <- intersect(ss,list.of.peptides)
-          peptides <- df.peptides[df.peptides$proteins %in% prots,"peptides"]
-          pvalue <- 1-phyper(q-1,j,m-j,k,lower.tail = TRUE, log.p = F)
+        q <- length(intersect(ss, list.of.peptides))
+        j <- length(intersect(ss, background.list))
+        n <- m - j
+        if (q > 1 & j > 1) {
+          prots <- intersect(ss, list.of.peptides)
+          peptides <- df.peptides[df.peptides$proteins %in% prots, "peptides"]
+          pvalue <- 1 - phyper(q - 1, j, m - j, k, lower.tail = TRUE, log.p = F)
           pathway[r] <- as.character(kinase)
           pvalues[r] <- pvalue
           enrichment[r] <- round((q/k)/(j/m), digits = 2)
@@ -755,19 +859,20 @@ enrichment.from.list <- function(
           data.size[r] <- k
           counts.bg[r] <- j
           bg.size[r] <- m
-          genes[r] <- paste(peptides,collapse = ";")
-          proteins[r] <- paste(prots,collapse = ";")
+          genes[r] <- paste(peptides, collapse = ";")
+          proteins[r] <- paste(prots, collapse = ";")
         }
       }
-      r=r+1
+      r = r + 1
     }
   }
-  results <- data.frame(pathway, pvalues,enrichment,counts, data.size,counts.bg,bg.size, proteins,genes)
-  #results <- na.omit(results)
-  if (nrow(results)>0){
-
-    results <- subset(results, enrichment!=0 & counts>0)
-    results <- results[order(-results$enrichment),]
+  results <- data.frame(
+    pathway, pvalues, enrichment, counts,
+    data.size, counts.bg, bg.size, proteins, genes
+  )
+  if (nrow(results) > 0) {
+    results <- subset(results, enrichment != 0 & counts > 0)
+    results <- results[order(-results$enrichment), ]
     results$FDR <- p.adjust(results$pvalues, method = "BH")
   }
   return(results)
