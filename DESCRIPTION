@@ -1,7 +1,7 @@
 Package: protools2
 Type: Package
 Title: A Set Of Tools For Proteomics And Phosphoproteomics Data Analysis
-Version: 0.2.13
+Version: 0.2.14
 Date: 2025-04-15
 Authors@R: c(
     person("Pedro", "Cutillas", , "p.cutillas@qmul.ac.uk", role = "aut",
@@ -35,6 +35,7 @@ Imports:
     plotly,
     heatmaply,
     umap,
+    VIM,
     openxlsx,
     readxl,
     tools,

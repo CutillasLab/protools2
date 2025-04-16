@@ -220,10 +220,15 @@ swap_dash_for_dot_in_col <- function(df, column_name) {
 
 # Impute missing values ----
 # NOTE: Function uses vectorised operations for speed, loops only on columns not rows.
-#
 impute_na <- function(df.design, df.areas) {
   # Get unique conditions
   conditions <- unique(df.design$condition)
+
+  # Select only numeric columns
+  numeric_columns <- df.areas[, sapply(df.areas, is.numeric)]
+
+  # Apply the min function to the dataset's numeric columns
+  min_value <- min(numeric_columns, na.rm = TRUE)
 
   # Loop over each unique condition
   for (condition in conditions) {
@@ -242,16 +247,33 @@ impute_na <- function(df.design, df.areas) {
       all_na <- is.na(row_means)
       # df.areas[all_na, heading] <- min(df.areas[, heading], na.rm = TRUE) - 1  # min of column (or min - 1)
 
-      # Select only numeric columns
-      numeric_columns <- df.areas[, sapply(df.areas, is.numeric)]
-
-      # Apply the min function to the dataset's numeric columns
-      min_value <- min(numeric_columns, na.rm = TRUE)
-
       # Assign the minimum value minus 1 to the specified location
       df.areas[all_na, heading] <- min_value - 1
 
     }
+  }
+
+  return(df.areas)
+}
+
+
+impute_na_knn <- function(df.design, df.areas, k = 5) {
+  # Get unique conditions
+  conditions <- unique(df.design$condition)
+
+  # Loop over each unique condition
+  for (condition in conditions) {
+    # Get the columns in df.areas that belong to the current condition
+    cols <- df.design$heading[df.design$condition == condition]
+
+    # Subset the data for the current condition
+    df.condition <- df.areas[, cols]
+
+    # Apply KNN imputation
+    df.condition.imputed <- VIM::kNN(df.condition, k = k, imp_var = FALSE)
+
+    # Replace the original columns with the imputed columns
+    df.areas[, cols] <- df.condition.imputed
   }
 
   return(df.areas)
@@ -264,7 +286,8 @@ impute_na <- function(df.design, df.areas) {
 # global environment. This meant that `df.combi` was using original from global scope not from argument
 normalize_areas_return_ppindex_edit <- function(
     pescal_output_file,
-    delta_score_cut_off = 0 # if (fragpipe) {0} else {5}
+    delta_score_cut_off = 0, # if (fragpipe) {0} else {5}
+    k_NN = NULL
 ) {
   # Set delta_score_cut_off to low (say 1) for proteomics data,
   # High (say 15) for phosphoproteomics data
@@ -305,10 +328,18 @@ normalize_areas_return_ppindex_edit <- function(
   df.norm[df.norm == 0] <- NA
 
   # Normalised NA imputation (no log2, no centre, no scale) ----
-  df.norm.na.imputed <- impute_na(
-    df.design = df.design,
-    df.areas = df.norm
-  )
+  if (is.null(k_NN)) {
+    df.norm.na.imputed <- impute_na(
+      df.design = df.design,
+      df.areas = df.norm
+    )
+  } else {
+    df.norm.na.imputed <- impute_na_knn(
+      df.design = df.design,
+      df.areas = df.norm,
+      k = k_NN
+    )
+  }
 
   # Normalised NA imputation (no log2, no scale, no centre) ----
   df.norm.na.imputed.no.log2.no.scale.no.centre <- df.norm
@@ -352,10 +383,18 @@ normalize_areas_return_ppindex_edit <- function(
   )
 
   # New improved NA imputation (log2, centred, scaled) ----
-  df.norm.log2.centered.scaled.na.imputed.new <- impute_na(
-    df.design = df.design,
-    df.areas = df.norm.log2.centered.scaled
-  )
+  if (is.null(k_NN)) {
+    df.norm.log2.centered.scaled.na.imputed.new <- impute_na(
+      df.design = df.design,
+      df.areas = df.norm.log2.centered.scaled
+    )
+  } else {
+    df.norm.log2.centered.scaled.na.imputed.new <- impute_na_knn(
+      df.design = df.design,
+      df.areas = df.norm.log2.centered.scaled,
+      k = k_NN
+    )
+  }
 
   # Centred ----
   df.norm.log2.centered.na.imputed <- df.norm.log2.centered
@@ -367,10 +406,18 @@ normalize_areas_return_ppindex_edit <- function(
   )
 
   # New improved NA imputation (log2, centred) ----
-  df.norm.log2.centered.na.imputed.new <- impute_na(
-    df.design = df.design,
-    df.areas = df.norm.log2.centered
-  )
+  if (is.null(k_NN)) {
+    df.norm.log2.centered.na.imputed.new <- impute_na(
+      df.design = df.design,
+      df.areas = df.norm.log2.centered
+    )
+  } else {
+    df.norm.log2.centered.na.imputed.new <- impute_na_knn(
+      df.design = df.design,
+      df.areas = df.norm.log2.centered,
+      k = k_NN
+    )
+  }
 
   # Previous NA imputation
   # df.norm.log2.centered.scaled.na.imputed <- df.norm.log2.centered.scaled
@@ -406,7 +453,8 @@ normalize_areas_return_ppindex <- normalize_areas_return_ppindex_edit
 normalize_areas_return_protein_groups_edit <- function(
     pescal_output_file,
     mascot.score.cut.off = 50, # if (fragpipe) {0} else {40}
-    n.peptide.cut.off = 1 # if (fragpipe) {0} else {1}
+    n.peptide.cut.off = 1, # if (fragpipe) {0} else {1}
+    k_NN = NULL
 ) {
   suppressMessages(
     df.areas <- data.frame(readxl::read_excel(pescal_output_file, "output_areas"))
@@ -463,10 +511,18 @@ normalize_areas_return_protein_groups_edit <- function(
   df.norm <- data.frame(protein.group = x$protein.group, x[, cols] * 1e+06)
 
   # New normalised NA imputation (no log2, no centre, no scale) ----
-  df.norm.na.imputed <- impute_na(
-    df.design = df.design,
-    df.areas = df.norm
-  )
+  if (is.null(k_NN)) {
+    df.norm.na.imputed <- impute_na(
+      df.design = df.design,
+      df.areas = df.norm
+    )
+  } else {
+    df.norm.na.imputed <- impute_na_knn(
+      df.design = df.design,
+      df.areas = df.norm,
+      k = k_NN
+    )
+  }
 
   # Normalised NA imputation (no log2, no scale, no centre) ----
   df.norm.na.imputed.no.log2.no.scale.no.centre <- df.norm
@@ -489,10 +545,18 @@ normalize_areas_return_protein_groups_edit <- function(
 
   # Centred
   # New improved NA imputation (log2, centred) ----
-  df.norm.log2.centered.na.imputed.new <- impute_na(
-    df.design = df.design,
-    df.areas = df.norm.log2.centered
-  )
+  if (is.null(k_NN)) {
+    df.norm.log2.centered.na.imputed.new <- impute_na(
+      df.design = df.design,
+      df.areas = df.norm.log2.centered
+    )
+  } else {
+    df.norm.log2.centered.na.imputed.new <- impute_na_knn(
+      df.design = df.design,
+      df.areas = df.norm.log2.centered,
+      k = k_NN
+    )
+  }
 
   # Centred + scaled
   df.norm.log2.centered.scaled.na.imputed <- df.norm.log2.centered.scaled
@@ -509,10 +573,18 @@ normalize_areas_return_protein_groups_edit <- function(
   )
 
   # New improved NA imputation (log2, centred, scaled) ----
-  df.norm.log2.centered.scaled.na.imputed.new <- impute_na(
-    df.design = df.design,
-    df.areas = df.norm.log2.centered.scaled
-  )
+  if (is.null(k_NN)) {
+    df.norm.log2.centered.scaled.na.imputed.new <- impute_na(
+      df.design = df.design,
+      df.areas = df.norm.log2.centered.scaled
+    )
+  } else {
+    df.norm.log2.centered.scaled.na.imputed.new <- impute_na_knn(
+      df.design = df.design,
+      df.areas = df.norm.log2.centered.scaled,
+      k = k_NN
+    )
+  }
 
   rownames(df.norm) <- df.norm.log2.centered$protein.group
   rownames(df.norm.na.imputed) <- df.norm.log2.centered$protein.group
@@ -1273,7 +1345,6 @@ pathway_enrichment_edit <- function(
       registerDoParallel(cl)
       t1 <- Sys.time()
       enrich.combined <- foreach(db = prot_dbs, .combine = rbind, .packages = "protools2") %dopar% {
-        # browser() # DEBUG
         e <- protools2::enrichment.from.list(
           list.of.peptides = c(increased.peptides, decreased.peptides),
           background.list,
