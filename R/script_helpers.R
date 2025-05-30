@@ -227,6 +227,9 @@ impute_na <- function(df.design, df.areas) {
   # Select only numeric columns
   numeric_columns <- df.areas[, sapply(df.areas, is.numeric)]
 
+  # Set 0 as NA
+  numeric_columns[numeric_columns == 0] <- NA
+
   # Apply the min function to the dataset's numeric columns
   min_value <- min(numeric_columns, na.rm = TRUE)
 
@@ -235,8 +238,8 @@ impute_na <- function(df.design, df.areas) {
     # Get the columns in df.areas that belong to the current condition
     cols <- df.design$heading[df.design$condition == condition]
 
-    # Calculate the mean of each row for the current condition, ignoring NA values
-    row_means <- apply(df.areas[, cols], 1, function(x) if (all(is.na(x))) NA else mean(x, na.rm = TRUE))
+    # Calculate the mean of each row for the current condition, ignoring NA values (`drop = FALSE` ensures that the result is still a data frame)
+    row_means <- apply(df.areas[, cols, drop = FALSE], 1, function(x) if (all(is.na(x))) NA else mean(x, na.rm = TRUE))
 
     # Replace NA values in df.areas for the current condition with the row means
     for (heading in cols) {
