@@ -1,7 +1,7 @@
 Package: protools2
 Type: Package
 Title: A Set Of Tools For Proteomics And Phosphoproteomics Data Analysis
-Version: 0.2.15
+Version: 0.2.16
 Date: 2025-04-15
 Authors@R: c(
     person("Pedro", "Cutillas", , "p.cutillas@qmul.ac.uk", role = "aut",
